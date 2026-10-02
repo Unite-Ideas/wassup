@@ -56,6 +56,7 @@ function ItemRow({ it }: { it: Item & { copies: number } }) {
         {it.copies > 1 && <span title="Syndicated copies of the same article">×{it.copies}</span>}
       </div>
       <a className="t" href={it.url} target="_blank" rel="noreferrer noopener">{it.title}</a>
+      {it.title_original && <div className="original">{it.title_original}</div>}
       {it.summary && <p>{it.summary}</p>}
     </div>
   );
@@ -99,6 +100,9 @@ export default function StoryPanel({ story, loading, desks, onClose, onSelectSto
           {stateCount > 0 && <span className="chip state">{stateCount} state media</span>}
         </div>
         <h2 className="title">{story.title}</h2>
+        {story.title_original && story.title_original !== story.title && (
+          <div className="original">Translated · original: {story.title_original}</div>
+        )}
         <div className="dim mono" style={{ fontSize: 11, marginBottom: 10 }}>
           {stamp(story.first_seen)} to {stamp(story.last_seen)}
         </div>

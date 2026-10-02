@@ -223,3 +223,6 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
 .time-svg .brush { fill: rgba(0,229,255,.08); stroke: var(--accent); stroke-width: 1; cursor: grab; }
 .time-svg .handle { fill: var(--accent); cursor: ew-resize; }
 .time-svg .now { stroke: var(--alert); stroke-dasharray: 2 3; }
+
+.original { font-size: 11.5px; color: var(--text-3); margin: -4px 0 10px; line-height: 1.35; }
+.item .original { margin: 3px 0 0; }

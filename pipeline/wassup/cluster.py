@@ -212,16 +212,22 @@ def refresh_stories(conn: psycopg.Connection, ids: list[int]) -> None:
            FROM best LEFT JOIN cc ON cc.story_id = best.story_id WHERE st.id = best.story_id""",
         {"ids": ids},
     )
-    # Headline from the most trusted outlet, earliest first. State media headlines are used
-    # only when nothing else covers the story.
+    refresh_headlines(conn, ids)
+
+
+def refresh_headlines(conn: psycopg.Connection, ids: list[int]) -> None:
+    """Headline from the most trusted outlet, preferring one readable in English, earliest
+    first. State media headlines are used only when nothing else covers the story."""
     conn.execute(
         """WITH t AS (
-             SELECT DISTINCT ON (i.story_id) i.story_id, i.title, coalesce(i.outlet_tier, s.trust_tier) tier
+             SELECT DISTINCT ON (i.story_id) i.story_id, i.title, coalesce(i.outlet_tier, s.trust_tier) tier,
+                    CASE WHEN i.language = 'en' THEN i.title ELSE i.title_en END title_en
              FROM items i JOIN sources s ON s.id = i.source_id
              WHERE i.story_id = ANY(%s)
              ORDER BY i.story_id, array_position(ARRAY['A','B','U','C','S'], coalesce(i.outlet_tier, s.trust_tier)::text),
-                      i.published_at)
-           UPDATE stories st SET title = t.title, title_tier = t.tier FROM t WHERE st.id = t.story_id""",
+                      (i.language = 'en' OR i.title_en IS NOT NULL) DESC, i.published_at)
+           UPDATE stories st SET title = t.title, title_tier = t.tier, title_en = t.title_en
+           FROM t WHERE st.id = t.story_id""",
         (ids,),
     )
 

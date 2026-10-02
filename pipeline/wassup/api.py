@@ -17,7 +17,7 @@ app = FastAPI(title="Wassup", version="0.1.0")
 app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
                    allow_methods=["*"], allow_headers=["*"])
 
-STORY_COLS = """s.id, s.title, s.title_tier, s.desk, s.routed, s.excluded_reason, s.significance, s.relevance,
+STORY_COLS = """s.id, coalesce(s.title_en, s.title) AS title, s.title AS title_original, s.title_tier, s.desk, s.routed, s.excluded_reason, s.significance, s.relevance,
     s.breaking, s.velocity, s.lat, s.lon, s.item_count, s.source_count, s.country_count, s.language_count,
     s.first_seen, s.last_seen"""
 
@@ -130,7 +130,7 @@ def list_stories(since: str | None = None, until: str | None = None, hours: floa
     w = Window(since, until, hours, desks, cold, min_sig)
     where, params = w.where, dict(w.params)
     if q:
-        where += " AND s.title ILIKE %(q)s"
+        where += " AND (s.title ILIKE %(q)s OR s.title_en ILIKE %(q)s)"
         params["q"] = f"%{q}%"
     if breaking:
         where += " AND s.breaking"
@@ -154,7 +154,8 @@ def story(story_id: int) -> dict:
         if not s:
             raise HTTPException(404, "story not found")
         items = conn.execute(
-            """SELECT i.id, i.title, i.summary, i.url, i.language, i.published_at, i.meta,
+            """SELECT i.id, coalesce(i.title_en, i.title) AS title, CASE WHEN i.title_en IS NOT NULL THEN i.title END AS title_original,
+                      i.summary, i.url, i.language, i.published_at, i.meta,
                       coalesce(i.outlet, src.name) outlet, coalesce(i.outlet_tier, src.trust_tier) tier,
                       (i.outlet_state OR src.state_media) state_media, src.kind source_kind
                FROM items i JOIN sources src ON src.id = i.source_id

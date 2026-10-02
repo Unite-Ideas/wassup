@@ -8,6 +8,7 @@ A global news intelligence system. Wassup collects news from around the world, f
 
 - **Collects** continuously, with no AI involved: GDELT (English plus a translingual feed covering 65 languages, every 15 minutes), 67 RSS feeds from outlets in 24 countries and 7 languages, Congress.gov bills, Senate roll call votes, and the Federal Register.
 - **Groups** articles into stories with local multilingual embeddings (bge-m3 through Ollama), so the Farsi, Russian and English coverage of one event becomes one story.
+- **Translates** non English headlines into English with your local model, keeping the original alongside, so foreign coverage reads naturally and reaches the right desk.
 - **Places** every story on the map using GDELT's geotags and a bundled gazetteer of 250 countries and 2,500 cities.
 - **Triages** each story (not each article) into one of seven desks or cold storage. Rules decide most stories for free; a local LLM gives a second opinion only when the rules are unsure. Sports, celebrity and lifestyle news goes to cold storage unless it ties into a bigger story.
 - **Rates sources**: primary and wire, independent, partisan, unrated, and state media. State media is always flagged and never picked as a headline when anyone else covers the story.

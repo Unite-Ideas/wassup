@@ -83,7 +83,7 @@ def learned_adjustment(centroid: np.ndarray, liked: np.ndarray | None, disliked:
 
 
 NEEDS_TRIAGE = """
-    SELECT id, title, centroid, item_count, source_count, country_count FROM stories
+    SELECT id, coalesce(title_en, title) AS title, centroid, item_count, source_count, country_count FROM stories
     WHERE triaged_item_count = 0
        OR item_count >= triaged_item_count * 2
        OR item_count >= triaged_item_count + 10
@@ -96,7 +96,7 @@ def _contexts(conn: psycopg.Connection, stories: list[dict]) -> list[StoryContex
     items: dict[int, list[dict]] = {i: [] for i in ids}
     for r in conn.execute(
         """SELECT * FROM (
-             SELECT i.story_id, i.title, i.summary, i.url, i.meta, coalesce(i.outlet_tier, s.trust_tier) tier,
+             SELECT i.story_id, coalesce(i.title_en, i.title) AS title, i.summary, i.url, i.meta, coalesce(i.outlet_tier, s.trust_tier) tier,
                     row_number() OVER (PARTITION BY i.story_id ORDER BY i.published_at DESC) rn
              FROM items i JOIN sources s ON s.id = i.source_id WHERE i.story_id = ANY(%s)) x
            WHERE rn <= 12""", (ids,)):

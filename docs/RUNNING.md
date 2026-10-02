@@ -111,6 +111,8 @@ Thumbs up and down in the story panel (MORE and LESS) teach the relevance model 
 | `EMBED_MODEL` | `bge-m3` | Must produce 1024 dimension vectors |
 | `TRIAGE_BACKEND` | `hybrid` | `rules`, `hybrid`, or `ollama` |
 | `TRIAGE_MODEL` | `qwen3:8b` | Any Ollama model that supports structured output |
+| `TRANSLATE_BACKEND` | `ollama` | Translate non English headlines into English, or `off` |
+| `TRANSLATE_MODEL` | (triage model) | Any Ollama chat model; qwen3 models translate well |
 | `CLUSTER_THRESHOLD` | 0.80 | Cosine similarity for "same story". Lower merges more |
 | `LINK_THRESHOLD` | 0.62 | Cosine similarity for "related story" strings |
 | `GDELT_BACKFILL_FILES` | 16 | 15 minute files fetched on first start |

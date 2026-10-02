@@ -150,5 +150,10 @@ CREATE TABLE IF NOT EXISTS kv (
 );
 
 -- Upgrades for databases created by earlier versions.
+ALTER TABLE items ADD COLUMN IF NOT EXISTS title_en text;            -- English translation of a non English headline
+ALTER TABLE items ADD COLUMN IF NOT EXISTS translated_at timestamptz;
+ALTER TABLE stories ADD COLUMN IF NOT EXISTS title_en text;          -- headline in English (original or translated)
+CREATE INDEX IF NOT EXISTS items_untranslated_idx ON items (story_id)
+    WHERE translated_at IS NULL AND language IS NOT NULL AND language <> 'en';
 ALTER TABLE item_places ADD COLUMN IF NOT EXISTS in_title boolean NOT NULL DEFAULT false;
 DROP INDEX IF EXISTS stories_centroid_idx;

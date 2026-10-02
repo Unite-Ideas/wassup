@@ -14,6 +14,7 @@ from .collectors.gdelt import GdeltCollector
 from .collectors.government import CongressCollector, FederalRegisterCollector
 from .collectors.rss import RssCollector
 from .signals import update_breaking, update_links
+from .translate import run_translate
 from .triage import run_triage
 
 log = logging.getLogger(__name__)
@@ -37,6 +38,7 @@ def _collector_loop(c: Collector, stop: threading.Event) -> None:
 
 STEPS: list[tuple[str, float, Callable]] = [
     ("process", 5, process_new),
+    ("translate", 10, run_translate),
     ("triage", 15, run_triage),
     ("breaking", 120, update_breaking),
     ("links", 600, update_links),
@@ -79,6 +81,8 @@ def run_once() -> None:
             log.info("collector %s: %d new", c.key, c.run(conn))
     with db.connect() as conn:
         while process_new(conn):
+            pass
+        while run_translate(conn):
             pass
         while run_triage(conn):
             pass

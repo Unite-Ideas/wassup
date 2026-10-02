@@ -9,7 +9,8 @@ export interface Desk {
 
 export interface Story {
   id: number;
-  title: string;
+  title: string; // English when a translation exists
+  title_original?: string;
   title_tier: Tier;
   desk: string | null;
   routed: boolean;
@@ -59,7 +60,8 @@ export interface GlobeData {
 
 export interface Item {
   id: number;
-  title: string;
+  title: string; // English when a translation exists
+  title_original: string | null;
   summary: string | null;
   url: string;
   language: string | null;

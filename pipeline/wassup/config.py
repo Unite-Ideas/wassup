@@ -36,6 +36,10 @@ class Settings:
     triage_backend: str = field(default_factory=lambda: _env("TRIAGE_BACKEND", "hybrid"))
     triage_model: str = field(default_factory=lambda: _env("TRIAGE_MODEL", "qwen3:8b"))
 
+    # Translation of non English headlines: "ollama" or "off". Uses the triage model unless set.
+    translate_backend: str = field(default_factory=lambda: _env("TRANSLATE_BACKEND", "ollama"))
+    translate_model: str = field(default_factory=lambda: _env("TRANSLATE_MODEL", "") or _env("TRIAGE_MODEL", "qwen3:8b"))
+
     # Clustering and linking thresholds (cosine similarity). Defaults depend on the embed backend.
     cluster_threshold: float | None = field(default_factory=lambda: float(os.environ["CLUSTER_THRESHOLD"]) if "CLUSTER_THRESHOLD" in os.environ else None)
     link_threshold: float | None = field(default_factory=lambda: float(os.environ["LINK_THRESHOLD"]) if "LINK_THRESHOLD" in os.environ else None)
