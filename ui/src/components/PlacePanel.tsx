@@ -1,0 +1,54 @@
+import { useMemo } from "react";
+import type { Desk, PlaceDetail } from "../lib/types";
+import { StoryCard } from "./StoryPanel";
+
+interface Props {
+  place: PlaceDetail | null;
+  loading: boolean;
+  desks: Map<string, Desk>;
+  onClose: () => void;
+  onSelectStory: (id: number) => void;
+}
+
+export default function PlacePanel({ place, loading, desks, onClose, onSelectStory }: Props) {
+  const byDesk = useMemo(() => {
+    const m = new Map<string, number>();
+    place?.stories.forEach((s) => m.set(s.desk ?? "none", (m.get(s.desk ?? "none") ?? 0) + 1));
+    return [...m.entries()].sort((a, b) => b[1] - a[1]);
+  }, [place]);
+
+  if (!place) return <div className="empty">{loading ? "Loading..." : "Place not found."}</div>;
+  const articles = place.stories.reduce((a, s) => a + s.item_count, 0);
+  const breaking = place.stories.filter((s) => s.breaking).length;
+
+  return (
+    <>
+      <div className="detail-head">
+        <button className="close" onClick={onClose} aria-label="Close">✕</button>
+        <div className="crumbs">
+          <span className="chip">⌖ {place.kind}</span>
+          {place.country && <span className="chip">{place.country}</span>}
+          {breaking > 0 && <span className="chip breaking">{breaking} breaking</span>}
+        </div>
+        <h2 className="title">{place.name}</h2>
+        <div className="metrics" style={{ gridTemplateColumns: "repeat(3, 1fr)" }}>
+          <div className="metric"><b>{place.stories.length}</b><span>Stories</span></div>
+          <div className="metric"><b>{articles}</b><span>Articles</span></div>
+          <div className="metric"><b className="mono" style={{ fontSize: 12 }}>{place.lat.toFixed(2)}, {place.lon.toFixed(2)}</b><span>Coordinates</span></div>
+        </div>
+        {byDesk.length > 0 && (
+          <div className="chips" style={{ marginTop: 10 }}>
+            {byDesk.map(([k, n]) => (
+              <span key={k} className="chip" style={{ color: desks.get(k)?.color }}>{desks.get(k)?.name ?? "No desk"} · {n}</span>
+            ))}
+          </div>
+        )}
+      </div>
+      <div className="detail-body">
+        {place.stories.length ? place.stories.map((s) => (
+          <StoryCard key={s.id} s={s} desks={desks} onClick={() => onSelectStory(s.id)} />
+        )) : <div className="empty">No stories here in this time window.</div>}
+      </div>
+    </>
+  );
+}
