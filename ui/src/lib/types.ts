@@ -48,7 +48,8 @@ export interface Link {
   b: number;
   kind: "related" | "same_actor" | string;
   weight: number;
-  evidence: { similarity?: number; entities?: string[] };
+  evidence: { similarity?: number; entities?: string[]; reason?: string; from?: number; to?: number; by?: string };
+  created_by?: string; // "rule" or "agent:<key>"
 }
 
 export interface GlobeData {
@@ -84,6 +85,53 @@ export interface Neighbor extends Story {
   kind: string;
   weight: number;
   evidence: Link["evidence"];
+  created_by: string;
+}
+
+export interface Brief {
+  id: number;
+  kind: "story" | "daily" | "standup" | "answer" | "desk";
+  story_id: number | null;
+  agent_key: string;
+  agent_name: string | null;
+  title?: string | null;
+  body: string;
+  meta?: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface NewsroomAgent {
+  key: string;
+  kind: "eic" | "desk" | "surge";
+  name: string;
+  desk: string | null;
+  focus_story_id: number | null;
+  focus_title: string | null;
+  status: "active" | "retired";
+  last_run_at: string | null;
+  last_summary: string | null;
+  created_at: string;
+  retired_at: string | null;
+  briefs_24h: number;
+  following: number;
+}
+
+export interface NewsroomEvent {
+  id: number;
+  agent_key: string | null;
+  agent_name: string | null;
+  kind: string;
+  text: string;
+  story_id: number | null;
+  created_at: string;
+}
+
+export interface NewsroomStatus {
+  connected: boolean;
+  set_up: boolean;
+  paperclip_url: string;
+  active: number;
+  surges: number;
 }
 
 export interface StoryDetail extends Story {
@@ -102,6 +150,8 @@ export interface StoryDetail extends Story {
   entities: Entity[];
   links: Neighbor[];
   feedback: number;
+  briefs: Brief[];
+  followers: { agent_key: string; agent_name: string | null; reason: string | null }[];
 }
 
 export interface PlaceDetail {
@@ -167,6 +217,7 @@ export interface Stats {
   languages: number;
   embed_backend: string;
   triage_backend: string;
+  jev?: { configured: boolean; spent_today_usd: number; spent_total_usd: number; requests_today: number; daily_budget_usd: number };
 }
 
 export interface Filters {

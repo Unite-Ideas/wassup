@@ -44,9 +44,13 @@ def test_end_to_end(database):
         update_breaking(conn)
         update_links(conn)
 
-        stories = conn.execute("SELECT id, title, item_count, desk, routed, excluded_reason FROM stories ORDER BY item_count DESC").fetchall()
-        kyiv = stories[0]
-        assert kyiv["item_count"] == 3 and kyiv["desk"] == "russia_ukraine" and kyiv["routed"]
+        # Other tests share the database, so find this test's stories by their article URLs.
+        mine = "SELECT DISTINCT story_id FROM items WHERE url = ANY(%s)"
+        strike = conn.execute(mine, ([f"https://example.com/{n}" for n in (1, 2, 3)],)).fetchall()
+        assert len(strike) == 1, "the three strike articles should form one story"
+        kyiv = conn.execute("SELECT id, title, item_count, desk, routed FROM stories WHERE id = %s", (strike[0]["story_id"],)).fetchone()
+        assert kyiv["desk"] == "russia_ukraine" and kyiv["routed"]
+        stories = conn.execute("SELECT id, title, routed, excluded_reason FROM stories").fetchall()
         sport = next(s for s in stories if "Premier League" in s["title"])
         assert not sport["routed"] and sport["excluded_reason"] == "sports"
 
@@ -59,11 +63,11 @@ def test_end_to_end(database):
     assert any(l["kind"] == "same_actor" for l in g["links"])
 
     detail = client.get(f"/api/stories/{kyiv['id']}").json()
-    assert len(detail["items"]) == 3 and detail["places"][0]["name"] == "Kyiv"
+    assert len(detail["items"]) >= 3 and detail["places"][0]["name"] == "Kyiv"
     assert detail["links"], "expected the Senate story to show up as connected"
 
     place_id = detail["places"][0]["id"]
-    assert client.get(f"/api/places/{place_id}", params={"hours": 6}).json()["stories"][0]["id"] == kyiv["id"]
+    assert kyiv["id"] in [s["id"] for s in client.get(f"/api/places/{place_id}", params={"hours": 6}).json()["stories"]]
 
     graph = client.get(f"/api/graph/{kyiv['id']}").json()
     ids = {n["id"] for n in graph["nodes"]}

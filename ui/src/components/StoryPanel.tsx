@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import type { Desk, Item, StoryDetail } from "../lib/types";
 import { EXCLUDED_LABEL, TIER_LABEL, ago, deskColor, languageName, stamp } from "../lib/format";
+import { Markdown } from "../lib/markdown";
 
 interface Props {
   story: StoryDetail | null;
@@ -138,6 +139,21 @@ export default function StoryPanel({ story, loading, desks, onClose, onSelectSto
           </div>
         </div>
 
+        {(story.briefs?.length > 0 || story.followers?.length > 0) && (
+          <div className="sub">
+            <div className="h">
+              Newsroom
+              {story.followers?.length > 0 && <span className="dimmer">followed by {story.followers.map((f) => f.agent_name ?? f.agent_key).join(", ")}</span>}
+            </div>
+            {story.briefs?.slice(0, 3).map((b) => (
+              <div key={b.id} className="brief compact">
+                <div className="brief-head mono"><span>{b.agent_name ?? b.agent_key}</span><span>{ago(b.created_at)}</span></div>
+                <Markdown text={b.body} />
+              </div>
+            ))}
+          </div>
+        )}
+
         {story.places.length > 0 && (
           <div className="sub">
             <div className="h">Locations</div>
@@ -158,9 +174,13 @@ export default function StoryPanel({ story, loading, desks, onClose, onSelectSto
         {tab === "links" && (
           story.links.length ? story.links.map((n) => (
             <StoryCard key={`${n.id}-${n.kind}`} s={n} desks={desks} onClick={() => onSelectStory(n.id)}
-              extra={<span className={`link-kind ${n.kind}`} title={n.evidence?.entities?.join(", ")}>
-                {n.kind === "same_actor" ? `actors: ${(n.evidence?.entities ?? []).slice(0, 2).join(", ")}` : `related ${Math.round((n.evidence?.similarity ?? n.weight) * 100)}%`}
-              </span>} />
+              extra={n.created_by?.startsWith("agent:") ? (
+                <span className="link-kind agent" title={n.evidence?.reason}>{n.kind.replace("_", " ")}: {n.evidence?.reason}</span>
+              ) : (
+                <span className={`link-kind ${n.kind}`} title={n.evidence?.entities?.join(", ")}>
+                  {n.kind === "same_actor" ? `actors: ${(n.evidence?.entities ?? []).slice(0, 2).join(", ")}` : `related ${Math.round((n.evidence?.similarity ?? n.weight) * 100)}%`}
+                </span>
+              )} />
           )) : <div className="empty">No connections found yet. Links are rebuilt every 10 minutes as coverage grows.</div>
         )}
 

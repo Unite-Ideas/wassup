@@ -1,4 +1,4 @@
-import type { Desk, Filters, GlobeData, GraphData, PlaceDetail, Stats, Story, StoryDetail, TimelineData } from "./types";
+import type { Brief, Desk, Filters, GlobeData, GraphData, NewsroomAgent, NewsroomEvent, NewsroomStatus, PlaceDetail, Stats, Story, StoryDetail, TimelineData } from "./types";
 
 async function get<T>(path: string, params?: Record<string, string | number | boolean | undefined>): Promise<T> {
   const qs = new URLSearchParams();
@@ -22,6 +22,19 @@ export const api = {
   place: (id: number, p: ReturnType<typeof filterParams>) => get<PlaceDetail>(`/places/${id}`, p),
   graph: (id: number, depth = 2) => get<GraphData>(`/graph/${id}`, { depth, max_nodes: 70 }),
   timeline: (p: { since: string; until: string; desks?: string; cold: boolean; buckets: number }) => get<TimelineData>("/timeline", p),
+  newsroomStatus: () => get<NewsroomStatus>("/newsroom/status"),
+  newsroomAgents: () => get<NewsroomAgent[]>("/newsroom/agents"),
+  newsroomEvents: (limit = 80) => get<NewsroomEvent[]>("/newsroom/events", { limit }),
+  briefs: (p: { hours?: number; kind?: string; limit?: number }) => get<Brief[]>("/newsroom/briefs", p),
+  callStandup: async (topic?: string) => {
+    const res = await fetch("/api/newsroom/standup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ topic: topic || null }),
+    });
+    if (!res.ok) throw new Error(`standup failed: ${res.status}`);
+    return res.json() as Promise<{ standup_id: number; desks_woken: number; already_open?: boolean }>;
+  },
   feedback: async (id: number, value: 1 | -1) => {
     const res = await fetch(`/api/stories/${id}/feedback`, {
       method: "POST",

@@ -13,6 +13,8 @@ interface Props {
 }
 
 const CARD_W = 74;
+// Relations the newsroom's agents draw; rule based links are "related" and "same_actor".
+const AGENT_KINDS = new Set(["causes", "responds_to", "escalates", "part_of", "contradicts", "parallels"]);
 const FONT = 3.6;
 const LINE_H = 4.6;
 const PAD = 4;
@@ -75,10 +77,12 @@ export default function BoardView({ rootId, selectedId, desks, onSelectStory, on
       .linkColor((l) => {
         const hover = state.current.hover;
         const touch = hover && (nodeId(l.source) === hover || nodeId(l.target) === hover);
+        if (AGENT_KINDS.has(l.kind)) return touch ? "rgba(255,214,90,1)" : "rgba(255,196,64,0.8)";
         if (l.kind === "related") return touch ? "rgba(0,229,255,0.9)" : "rgba(0,229,255,0.35)";
         return touch ? "rgba(255,59,92,0.95)" : "rgba(220,40,60,0.55)";
       })
-      .linkWidth((l) => (l.kind === "mentions" ? 0.8 : 0.8 + l.weight * 1.6))
+      .linkWidth((l) => (l.kind === "mentions" ? 0.8 : AGENT_KINDS.has(l.kind) ? 2.6 : 0.8 + l.weight * 1.6))
+      .linkLabel((l) => (AGENT_KINDS.has(l.kind) ? `${l.kind.replace("_", " ")}: ${l.evidence?.reason ?? ""}` : ""))
       .linkLineDash((l) => (l.kind === "related" ? [3, 2] : null))
       .nodeCanvasObject((n, ctx, scale) => {
         const s = state.current;
@@ -229,7 +233,7 @@ export default function BoardView({ rootId, selectedId, desks, onSelectStory, on
           {data.nodes.filter((n) => n.type === "story").length} stories · {data.nodes.filter((n) => n.type === "entity").length} people and orgs
           <br />click a card to read it · double click to re-center · drag to pin
           <div style={{ marginTop: 6 }}>
-            <span style={{ color: "#ff3b5c" }}>━━</span> shared actors &nbsp; <span style={{ color: "#00e5ff" }}>╍╍</span> related coverage
+            <span style={{ color: "#ffc440" }}>━━</span> drawn by the newsroom &nbsp; <span style={{ color: "#ff3b5c" }}>━━</span> shared actors &nbsp; <span style={{ color: "#00e5ff" }}>╍╍</span> related coverage
           </div>
         </div>
       )}

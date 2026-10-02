@@ -102,6 +102,7 @@ def main() -> None:
             else:
                 p.error("newsroom needs one of: connect, setup, status, standup")
     elif a.command == "api":
+        db.init_schema()
         _api(a.host, a.port)
     else:
         p.error(f"unknown command {a.command}")

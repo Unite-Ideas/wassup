@@ -44,6 +44,12 @@ services:
       CONGRESS_API_KEY: ${CONGRESS_API_KEY:-}
       GDELT_BACKFILL_FILES: ${GDELT_BACKFILL_FILES:-16}
       WASSUP_CONFIG_DIR: /app/config
+      # Newsroom (Phase 1). Only used once you run `wassup newsroom connect`.
+      PAPERCLIP_URL: http://paperclip:3100
+      PAPERCLIP_PUBLIC_URL: ${PAPERCLIP_PUBLIC_URL:-http://localhost:3100}
+      WASSUP_AGENT_URL: http://app:8000/api/newsroom/heartbeat
+      WASSUP_INTERNAL_URL: http://app:8000
+      WASSUP_PUBLIC_URL: ${WASSUP_PUBLIC_URL:-http://localhost:8000}
     ports:
       - "127.0.0.1:8000:8000"
     volumes:
@@ -52,5 +58,33 @@ services:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped
 
+  # The newsroom's org chart, schedules and Editor in Chief. Optional: start it with
+  #   docker compose --profile newsroom up -d --build
+  # The first build takes a while (it builds Paperclip from source). See docs/NEWSROOM.md.
+  paperclip:
+    profiles: ["newsroom"]
+    build:
+      context: https://github.com/paperclipai/paperclip.git#v2026.1001.0
+    pids_limit: 2048
+    environment:
+      HOST: "0.0.0.0"
+      PAPERCLIP_HOME: /paperclip
+      PAPERCLIP_DEPLOYMENT_MODE: authenticated
+      PAPERCLIP_DEPLOYMENT_EXPOSURE: private
+      PAPERCLIP_PUBLIC_URL: ${PAPERCLIP_PUBLIC_URL:-http://localhost:3100}
+      PAPERCLIP_ALLOWED_HOSTNAMES: paperclip   # so the Wassup container can reach it by name
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-}
+      # Desk agents are Wassup endpoints on the private Docker network; allow exactly that one.
+      PAPERCLIP_HTTP_ADAPTER_PRIVATE_ENDPOINT_ALLOWLIST: http://app:8000
+      # The Editor in Chief runs Claude Code. Set one of these in .env.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN:-}
+    ports:
+      - "127.0.0.1:3100:3100"
+    volumes:
+      - paperclip-data:/paperclip
+    restart: unless-stopped
+
 volumes:
   wassup-db:
+  paperclip-data:

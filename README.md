@@ -1,6 +1,6 @@
 # Wassup
 
-A global news intelligence system. Wassup collects news from around the world, filters it against your interests, groups articles into stories, links stories that push and pull on each other, and shows it all on an interactive globe and evidence board. In Phase 1 a newsroom of AI agents, run by [Paperclip](https://github.com/paperclipai/paperclip), takes over the research.
+A global news intelligence system. Wassup collects news from around the world, filters it against your interests, groups articles into stories, links stories that push and pull on each other, and shows it all on an interactive globe and evidence board. A newsroom of AI agents, organized by [Paperclip](https://github.com/paperclipai/paperclip), reads it all, writes briefs, and draws the connections across desks.
 
 ![Globe](docs/images/globe.png)
 
@@ -18,6 +18,12 @@ A global news intelligence system. Wassup collects news from around the world, f
 | Story panel | Evidence board |
 | --- | --- |
 | ![Story](docs/images/story.png) | ![Board](docs/images/board.png) |
+
+## The newsroom (Phase 1)
+
+An Editor in Chief (Claude) and one agent per desk (your local model) check in on a schedule, write briefs, follow stories, and draw reasoned connections between desks, shown in gold on the globe. Breaking stories can get a temporary surge agent that tracks them every few minutes until they cool. A daily brief and an afternoon standup land on the NEWSROOM tab. Optional and off by default: see [docs/NEWSROOM.md](docs/NEWSROOM.md).
+
+Triage can also use [Jev](https://docs.typesafe.ai/introduction) (TypeSafe AI) for fast, calibrated decisions on the stories the keyword rules are unsure about. Set `TYPESAFE_API_KEY` in `.env`; spending is capped per day.
 
 ## Quick start (Windows 11)
 

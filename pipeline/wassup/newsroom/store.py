@@ -16,6 +16,10 @@ AGENT_RELATIONS = ["causes", "responds_to", "escalates", "part_of", "contradicts
 def event(conn, agent_key: str | None, kind: str, text: str, story_id: int | None = None, **meta) -> None:
     conn.execute("INSERT INTO newsroom_events (agent_key, kind, text, story_id, meta) VALUES (%s, %s, %s, %s, %s)",
                  (agent_key, kind, text[:2000], story_id, Jsonb(meta)))
+    if agent_key == "eic" and kind != "escalation":
+        # The Editor in Chief works through the API rather than the heartbeat endpoint, so its
+        # latest action is its activity.
+        conn.execute("UPDATE newsroom_agents SET last_run_at = now(), last_summary = %s WHERE key = 'eic'", (text[:1000],))
 
 
 def add_brief(conn, kind: str, agent_key: str, body: str, story_id: int | None = None,

@@ -8,6 +8,7 @@ import LeftPanel from "./components/LeftPanel";
 import StoryPanel from "./components/StoryPanel";
 import PlacePanel from "./components/PlacePanel";
 import TopBar from "./components/TopBar";
+import NewsroomView from "./components/NewsroomView";
 
 const HOUR = 3600e3;
 const REFRESH_MS = 60_000;
@@ -24,7 +25,7 @@ export default function App() {
 
   const [extentHours, setExtentHours] = useState(72);
   const [filters, setFilters] = useState<Filters>(() => ({ ...liveWindow(24 * HOUR), live: true, desks: new Set(), cold: false, minSig: 0 }));
-  const [view, setView] = useState<"globe" | "board">("globe");
+  const [view, setView] = useState<"globe" | "board" | "newsroom">("globe");
   const [selection, setSelection] = useState<Selection>(null);
   const [boardRoot, setBoardRoot] = useState<number | null>(null);
   const [showLinks, setShowLinks] = useState(true);
@@ -198,6 +199,7 @@ export default function App() {
             <span><span className="live-dot" />breaking</span>
           </div>
         </div>
+        {view === "newsroom" && <NewsroomView desks={deskMap} onSelectStory={selectStory} />}
         {view === "board" && (
           <BoardView rootId={boardRoot ?? storyId} selectedId={storyId} desks={deskMap} onSelectStory={selectStory} onReRoot={setBoardRoot} />
         )}

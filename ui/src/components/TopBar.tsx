@@ -5,8 +5,8 @@ import { StoryCard } from "./StoryPanel";
 
 interface Props {
   stats: Stats | null;
-  view: "globe" | "board";
-  onView: (v: "globe" | "board") => void;
+  view: "globe" | "board" | "newsroom";
+  onView: (v: "globe" | "board" | "newsroom") => void;
   desks: Map<string, Desk>;
   onSelectStory: (id: number) => void;
 }
@@ -46,6 +46,11 @@ export default function TopBar({ stats, view, onView, desks, onSelectStory }: Pr
         <div className={`kpi ${stats?.breaking ? "alert" : ""}`}><b>{k(stats?.breaking)}</b><span>Breaking</span></div>
         <div className="kpi"><b>{k(stats?.links)}</b><span>Links</span></div>
         <div className="kpi"><b>{k(stats?.languages)}</b><span>Languages</span></div>
+        {stats?.jev?.configured && (
+          <div className="kpi" title={`Jev spend today, of a $${stats.jev.daily_budget_usd.toFixed(2)} daily cap. $${stats.jev.spent_total_usd.toFixed(2)} all time.`}>
+            <b>${stats.jev.spent_today_usd.toFixed(stats.jev.spent_today_usd < 1 ? 3 : 2)}</b><span>Jev today</span>
+          </div>
+        )}
         <div className={`kpi ${stats?.sources_failing ? "alert" : ""}`} title="Sources failing / total. See /api/sources for details.">
           <b>{stats ? `${stats.sources - stats.sources_failing}/${stats.sources}` : "..."}</b><span>Sources up</span>
         </div>
@@ -65,6 +70,7 @@ export default function TopBar({ stats, view, onView, desks, onSelectStory }: Pr
       <div className="seg">
         <button className={view === "globe" ? "on" : ""} onClick={() => onView("globe")}>GLOBE</button>
         <button className={view === "board" ? "on" : ""} onClick={() => onView("board")}>BOARD</button>
+        <button className={view === "newsroom" ? "on" : ""} onClick={() => onView("newsroom")}>NEWSROOM</button>
       </div>
     </header>
   );

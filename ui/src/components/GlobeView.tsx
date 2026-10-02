@@ -150,7 +150,7 @@ export default function GlobeView(props: Props) {
       .arcsTransitionDuration(0)
       .arcLabel((d: object) => {
         const a = d as Arc;
-        return `<div class="globe-tip"><div class="k">${a.kind === "same_actor" ? "Shared actors" : "Related coverage"}</div>
+        return `<div class="globe-tip"><div class="k">${a.colors[0].startsWith("rgba(255, 196") ? "Connection drawn by the newsroom" : a.kind === "same_actor" ? "Shared actors" : "Related coverage"}</div>
           ${escapeHtml(a.titles[0])}<br/><span style="color:#5b6f84">to</span><br/>${escapeHtml(a.titles[1])}
           ${a.evidence ? `<div class="k" style="margin-top:6px">${escapeHtml(a.evidence)}</div>` : ""}</div>`;
       })
@@ -215,7 +215,7 @@ export default function GlobeView(props: Props) {
       const have = new Set(links.map((l) => `${l.a}-${l.b}-${l.kind}`));
       for (const n of props.storyDetail.links) {
         const [a, b] = props.storyDetail.id < n.id ? [props.storyDetail.id, n.id] : [n.id, props.storyDetail.id];
-        if (!have.has(`${a}-${b}-${n.kind}`)) links.push({ a, b, kind: n.kind, weight: n.weight, evidence: n.evidence });
+        if (!have.has(`${a}-${b}-${n.kind}`)) links.push({ a, b, kind: n.kind, weight: n.weight, evidence: n.evidence, created_by: n.created_by });
       }
     }
     const out: Arc[] = [];
@@ -227,14 +227,17 @@ export default function GlobeView(props: Props) {
       const focus = focusId != null && (l.a === focusId || l.b === focusId);
       if (!props.showLinks && !focus) continue;
       const alpha = focusId == null ? 0.22 + l.weight * 0.35 : focus ? 0.95 : 0.05;
-      const colors: [string, string] = l.kind === "same_actor"
+      const byAgent = !!l.created_by?.startsWith("agent:");
+      const colors: [string, string] = byAgent
+        ? [`rgba(255, 196, 64, ${Math.max(alpha, focusId == null ? 0.75 : alpha)})`, `rgba(255, 236, 160, ${Math.max(alpha, focusId == null ? 0.75 : alpha)})`]
+        : l.kind === "same_actor"
         ? [`rgba(255, 59, 92, ${alpha})`, `rgba(255, 120, 140, ${alpha})`]
         : [hexToRgba(deskColor(props.desks, sa.desk), alpha), hexToRgba(deskColor(props.desks, sb.desk), alpha)];
       out.push({
-        a: l.a, b: l.b, kind: l.kind, weight: l.weight, focus, colors,
+        a: l.a, b: l.b, kind: l.kind, weight: byAgent ? Math.max(l.weight, 0.8) : l.weight, focus: focus || (byAgent && focusId == null), colors,
         startLat: sa.lat, startLng: sa.lon, endLat: sb.lat, endLng: sb.lon,
         titles: [sa.title, sb.title],
-        evidence: l.evidence?.entities?.length ? l.evidence.entities.slice(0, 4).join(", ") : l.evidence?.similarity ? `similarity ${l.evidence.similarity}` : "",
+        evidence: byAgent ? `${l.kind.replace("_", " ")}: ${l.evidence?.reason ?? ""}` : l.evidence?.entities?.length ? l.evidence.entities.slice(0, 4).join(", ") : l.evidence?.similarity ? `similarity ${l.evidence.similarity}` : "",
       });
     }
     return out;

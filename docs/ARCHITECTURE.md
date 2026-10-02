@@ -73,7 +73,7 @@ The excluded category combined with the "connects to a larger story" check handl
 
 We run both backends side by side at first and compare them. If Jev is clearly better per dollar we lean on it. If the local model is close enough, we stay local.
 
-**Status (Phase 0):** Jev is not wired in, since early access is not available yet. The `Decider` interface is in place (`pipeline/wassup/triage/decider.py`) with two working backends: `RulesDecider` (keywords, URL patterns, GDELT themes) and `OllamaDecider` (local LLM with a JSON schema). `HybridDecider` is the confidence gated router described above. A `JevDecider` is one new class when access arrives.
+**Status:** Jev is wired in as `JevDecider` (`pipeline/wassup/triage/jev.py`), asked only when the rules are unsure, with the local LLM after it when Jev is unsure too, and a daily spending cap. Earlier note: The `Decider` interface is in place (`pipeline/wassup/triage/decider.py`) with two working backends: `RulesDecider` (keywords, URL patterns, GDELT themes) and `OllamaDecider` (local LLM with a JSON schema). `HybridDecider` is the confidence gated router described above. A `JevDecider` is one new class when access arrives.
 
 ---
 
@@ -220,7 +220,7 @@ Phase 0 implementation notes:
 - Links: "related" when centroid similarity is just below the same story threshold, "same_actor" when two stories share at least two people or organizations that appear in fewer than 15 stories (so a head of state does not link everything).
 - Known gaps to address in Phase 1: GDELT geotags are noisy for some stories (a Bogota neighborhood called Kennedy); near duplicate stories still appear when phrasing differs a lot; no translation of non English headlines yet.
 
-**Phase 1: the newsroom**
+**Phase 1: the newsroom** (built; see [NEWSROOM.md](NEWSROOM.md))
 - Install Paperclip locally, create the Wassup company
 - Editor in Chief plus two desks (Russia and Ukraine, US Politics)
 - Agent runtime and tools (search, cold storage lookup, write brief, propose link)
