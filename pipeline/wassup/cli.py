@@ -7,6 +7,7 @@
   wassup process|triage|links|breaking
   wassup retriage             mark every story for triage again (after editing desks or interests)
   wassup rebuild-stories      re-cluster every item (after changing EMBED_BACKEND or EMBED_MODEL)
+  wassup relocate             re-score place evidence for the last week and re-place stories
   wassup newsroom connect     connect to Paperclip (you approve it once in the browser)
   wassup newsroom setup       create or update the newsroom in Paperclip: editor, desks, routines
   wassup newsroom status      show the newsroom's agents
@@ -78,6 +79,12 @@ def main() -> None:
             conn.execute("UPDATE stories SET triaged_item_count = 0")
             conn.commit()
         print("all stories queued for triage")
+    elif a.command == "relocate":
+        from .locate import relocate
+
+        db.init_schema()
+        with db.connect() as conn:
+            print(f"{relocate(conn)} stories re-placed")
     elif a.command == "rebuild-stories":
         from .cluster import rebuild_stories
 

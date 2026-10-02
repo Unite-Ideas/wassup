@@ -182,3 +182,43 @@ def run_locate(conn: psycopg.Connection, limit: int = 40, max_seconds: float = 6
     if done:
         log.info("checked %d story locations", done)
     return done
+
+
+def relocate(conn: psycopg.Connection, days: int = 7) -> int:
+    """Re-score place evidence for recent articles with the current rules (they were stored
+    before the rules existed), then re-place their stories. Locations you set stay put."""
+    from .cluster import refresh_stories
+    from .collectors.base import RawItem, weighted_places
+    from .geo import Place
+
+    distrusted = {r["key"] for r in conn.execute("SELECT key FROM places WHERE false_positive_count >= 2")}
+    items = conn.execute(
+        """SELECT i.id, i.title, i.summary, i.url, i.meta, i.story_id, s.country AS source_country
+           FROM items i JOIN sources s ON s.id = i.source_id
+           WHERE i.published_at > now() - %s * interval '1 day' AND i.story_id IS NOT NULL""", (days,)).fetchall()
+    places = {}
+    for r in conn.execute(
+        """SELECT ip.item_id, ip.weight, p.id, p.key, p.name, p.country, p.kind, p.lat, p.lon FROM item_places ip
+           JOIN places p ON p.id = ip.place_id JOIN items i ON i.id = ip.item_id
+           WHERE i.published_at > now() - %s * interval '1 day' ORDER BY ip.item_id, p.id""", (days,)):
+        places.setdefault(r["item_id"], []).append(r)
+    updates, stories = [], set()
+    for it in items:
+        rows = [r for r in places.get(it["id"], []) if r["weight"] > 0]  # removed by you: leave at zero
+        if not rows:
+            continue
+        raw = RawItem(url=it["url"], title=it["title"], summary=it["summary"] or "", published_at=None, meta=it["meta"] or {},
+                      outlet_country=None if (it["meta"] or {}).get("feed") else it["source_country"],
+                      places=[Place(r["key"], r["name"], r["country"], r["kind"], r["lat"], r["lon"]) for r in rows])
+        by_key = {r["key"]: r["id"] for r in rows}
+        for p, in_title, w in weighted_places(raw, distrusted):
+            if p.key in by_key:
+                updates.append((w, in_title, it["id"], by_key[p.key]))
+        stories.add(it["story_id"])
+    with conn.cursor() as cur:
+        cur.executemany("UPDATE item_places SET weight = %s, in_title = %s WHERE item_id = %s AND place_id = %s", updates)
+    ids = list(stories)
+    for i in range(0, len(ids), 500):
+        refresh_stories(conn, ids[i:i + 500])
+        conn.commit()
+    return len(ids)
