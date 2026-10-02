@@ -1,0 +1,33 @@
+# The newsroom: how Wassup's agents run inside Paperclip.
+# Changes apply on restart. Agent counts and schedules apply the next time you run
+# `wassup newsroom setup` (it is safe to run again; it only adds or updates).
+
+company:
+  name: Wassup
+  description: Global news intelligence desk. Tracks wars, geopolitics, US politics and Congress, the UN, migration, and government document releases, and works out how they connect.
+  timezone: America/Chicago        # used for the daily brief and standup times
+
+editor_in_chief:
+  name: Editor in Chief
+  model: claude-sonnet-5-5          # Claude model for the Editor in Chief (Paperclip's claude_local adapter)
+  daily_brief_cron: "45 6 * * *"   # 6:45 every morning
+  standup_cron: "50 16 * * *"      # 4:50 every afternoon
+  max_escalations_per_day: 8       # breaking stories handed to the Editor in Chief per day, at most
+
+desks:
+  heartbeat_minutes: 60            # how often each desk reviews its queue
+  model: ""                        # local Ollama model for desk work; empty uses TRIAGE_MODEL
+  max_stories_per_run: 20          # stories a desk looks at per heartbeat
+  max_briefs_per_run: 4            # briefs it writes per heartbeat
+
+surge:
+  heartbeat_minutes: 10            # surge agents check in this often
+  max_active: 5                    # surge agents at once, at most
+  min_velocity: 6                  # articles per hour for a story to qualify for escalation
+  min_significance: 2.5
+  retire_after_quiet_runs: 3       # retire after this many check ins with little new coverage
+  quiet_items: 2                   # "little new coverage" means fewer new articles than this
+  max_hours: 72                    # retire after this long no matter what
+
+limits:
+  max_agents: 20                   # all newsroom agents, Editor in Chief and desks included

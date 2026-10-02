@@ -12,8 +12,10 @@ from pydantic import BaseModel
 
 from . import db
 from .config import load_yaml, settings
+from .newsroom.api import router as newsroom_router
 
 app = FastAPI(title="Wassup", version="0.1.0")
+app.include_router(newsroom_router)
 app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
                    allow_methods=["*"], allow_headers=["*"])
 
@@ -118,8 +120,9 @@ def globe(since: str | None = None, until: str | None = None, hours: float | Non
                 WHERE {w.where} GROUP BY p.id ORDER BY story_count DESC LIMIT 2000""", w.params).fetchall()
         ids = [s["id"] for s in stories]
         links = conn.execute(
-            """SELECT a, b, kind, weight, evidence FROM story_links
-               WHERE a = ANY(%(ids)s) AND b = ANY(%(ids)s) ORDER BY weight DESC LIMIT 4000""", {"ids": ids}).fetchall() if ids else []
+            """SELECT a, b, kind, weight, evidence, created_by FROM story_links
+               WHERE a = ANY(%(ids)s) AND b = ANY(%(ids)s)
+               ORDER BY created_by LIKE 'agent:%%' DESC, weight DESC LIMIT 4000""", {"ids": ids}).fetchall() if ids else []
     return {"window": {"start": w.start, "end": w.end}, "stories": stories, "places": places, "links": links}
 
 
@@ -142,7 +145,7 @@ def list_stories(since: str | None = None, until: str | None = None, hours: floa
 
 def _neighbors(conn, story_id: int) -> list[dict]:
     return conn.execute(
-        f"""SELECT l.kind, l.weight, l.evidence, {STORY_COLS}
+        f"""SELECT l.kind, l.weight, l.evidence, l.created_by, {STORY_COLS}
             FROM story_links l JOIN stories s ON s.id = CASE WHEN l.a = %(id)s THEN l.b ELSE l.a END
             WHERE l.a = %(id)s OR l.b = %(id)s ORDER BY l.weight DESC LIMIT 50""", {"id": story_id}).fetchall()
 
@@ -169,8 +172,15 @@ def story(story_id: int) -> dict:
                JOIN entities e ON e.id = ie.entity_id WHERE i.story_id = %s
                GROUP BY e.id ORDER BY mentions DESC LIMIT 20""", (story_id,)).fetchall()
         feedback = conn.execute("SELECT value FROM feedback WHERE story_id = %s ORDER BY created_at DESC LIMIT 1", (story_id,)).fetchone()
+        briefs = conn.execute(
+            """SELECT b.id, b.kind, b.agent_key, a.name AS agent_name, b.body, b.meta, b.created_at FROM briefs b
+               LEFT JOIN newsroom_agents a ON a.key = b.agent_key WHERE b.story_id = %s ORDER BY b.created_at DESC LIMIT 10""",
+            (story_id,)).fetchall()
+        followers = conn.execute(
+            """SELECT f.agent_key, a.name AS agent_name, f.reason FROM follows f LEFT JOIN newsroom_agents a ON a.key = f.agent_key
+               WHERE f.story_id = %s AND f.active""", (story_id,)).fetchall()
         return {**s, "items": items, "places": places, "entities": entities, "links": _neighbors(conn, story_id),
-                "feedback": feedback["value"] if feedback else 0}
+                "feedback": feedback["value"] if feedback else 0, "briefs": briefs, "followers": followers}
 
 
 @app.get("/api/places/{place_id}")

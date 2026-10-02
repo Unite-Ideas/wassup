@@ -7,6 +7,10 @@
   wassup process|triage|links|breaking
   wassup retriage             mark every story for triage again (after editing desks or interests)
   wassup rebuild-stories      re-cluster every item (after changing EMBED_BACKEND or EMBED_MODEL)
+  wassup newsroom connect     connect to Paperclip (you approve it once in the browser)
+  wassup newsroom setup       create or update the newsroom in Paperclip: editor, desks, routines
+  wassup newsroom status      show the newsroom's agents
+  wassup newsroom standup     call a standup now
   wassup api                  serve the API and the built UI on http://localhost:8000
   wassup dev                  pipeline and API together in one process
 """
@@ -79,6 +83,24 @@ def main() -> None:
 
         with db.connect() as conn:
             print(f"{rebuild_stories(conn)} items queued; `wassup run` will re-cluster them")
+    elif a.command == "newsroom":
+        from .newsroom import manager, setup as nsetup, store as nstore
+
+        with db.connect() as conn:
+            if a.name == "connect":
+                db.init_schema()
+                raise SystemExit(0 if nsetup.connect(conn) else 1)
+            elif a.name == "setup":
+                db.init_schema()
+                nsetup.setup(conn)
+            elif a.name == "status":
+                for ag in nstore.active_agents(conn):
+                    when = ag["last_run_at"].strftime("%b %d %H:%M") if ag["last_run_at"] else "never"
+                    print(f"{ag['name']:<40} {ag['kind']:<6} last run {when:<14} {(ag['last_summary'] or '')[:70]}")
+            elif a.name == "standup":
+                print(manager.call_standup(conn, "you"))
+            else:
+                p.error("newsroom needs one of: connect, setup, status, standup")
     elif a.command == "api":
         _api(a.host, a.port)
     else:

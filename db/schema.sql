@@ -157,3 +157,85 @@ CREATE INDEX IF NOT EXISTS items_untranslated_idx ON items (story_id)
     WHERE translated_at IS NULL AND language IS NOT NULL AND language <> 'en';
 ALTER TABLE item_places ADD COLUMN IF NOT EXISTS in_title boolean NOT NULL DEFAULT false;
 DROP INDEX IF EXISTS stories_centroid_idx;
+
+-- Phase 1: the newsroom. Agents run in Paperclip; what they produce lives here so the
+-- dashboard can show it next to the stories.
+
+-- Every Paperclip agent Wassup manages. key is stable: "eic", "desk:<desk>", "surge:<story id>".
+CREATE TABLE IF NOT EXISTS newsroom_agents (
+    key                 text PRIMARY KEY,
+    kind                text NOT NULL,               -- eic | desk | surge
+    name                text NOT NULL,
+    desk                text,
+    focus_story_id      bigint REFERENCES stories(id) ON DELETE SET NULL,  -- surge agents
+    paperclip_agent_id  text UNIQUE,
+    paperclip_api_key   text,                        -- the agent's own key, used to report back
+    log_issue_id        text,                        -- long lived Paperclip issue the agent writes its reports on
+    status              text NOT NULL DEFAULT 'active', -- active | retired
+    last_run_at         timestamptz,
+    last_summary        text,
+    created_at          timestamptz NOT NULL DEFAULT now(),
+    retired_at          timestamptz,
+    meta                jsonb NOT NULL DEFAULT '{}'::jsonb
+);
+
+-- Written analysis: story briefs, desk summaries, the daily brief, standup notes.
+CREATE TABLE IF NOT EXISTS briefs (
+    id              bigserial PRIMARY KEY,
+    kind            text NOT NULL,                   -- story | desk | daily | standup | answer
+    story_id        bigint REFERENCES stories(id) ON DELETE CASCADE,
+    agent_key       text NOT NULL,
+    title           text,
+    body            text NOT NULL,
+    meta            jsonb NOT NULL DEFAULT '{}'::jsonb,
+    created_at      timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS briefs_story_idx ON briefs (story_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS briefs_kind_idx ON briefs (kind, created_at DESC);
+
+-- Stories an agent has decided to keep tracking.
+CREATE TABLE IF NOT EXISTS follows (
+    story_id        bigint NOT NULL REFERENCES stories(id) ON DELETE CASCADE,
+    agent_key       text NOT NULL,
+    reason          text,
+    active          boolean NOT NULL DEFAULT true,
+    created_at      timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (story_id, agent_key)
+);
+
+-- What happened in the newsroom, newest first, for the dashboard feed.
+CREATE TABLE IF NOT EXISTS newsroom_events (
+    id              bigserial PRIMARY KEY,
+    agent_key       text,
+    kind            text NOT NULL,                   -- run | brief | link | follow | surge_hired | surge_retired | escalation | standup | error
+    text            text NOT NULL,
+    story_id        bigint REFERENCES stories(id) ON DELETE SET NULL,
+    meta            jsonb NOT NULL DEFAULT '{}'::jsonb,
+    created_at      timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS newsroom_events_created_idx ON newsroom_events (created_at DESC);
+
+-- Standups: the Editor in Chief (or the schedule) calls one, every desk reports, and the
+-- Editor in Chief is handed the reports to write them up.
+CREATE TABLE IF NOT EXISTS standups (
+    id              bigserial PRIMARY KEY,
+    requested_by    text NOT NULL,
+    topic           text,
+    status          text NOT NULL DEFAULT 'collecting', -- collecting | handed_off | done
+    created_at      timestamptz NOT NULL DEFAULT now(),
+    handed_off_at   timestamptz
+);
+CREATE TABLE IF NOT EXISTS standup_reports (
+    standup_id      bigint NOT NULL REFERENCES standups(id) ON DELETE CASCADE,
+    agent_key       text NOT NULL,
+    body            text NOT NULL,
+    created_at      timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (standup_id, agent_key)
+);
+
+-- Breaking stories already escalated to the Editor in Chief, so each is raised once.
+CREATE TABLE IF NOT EXISTS escalations (
+    story_id        bigint PRIMARY KEY REFERENCES stories(id) ON DELETE CASCADE,
+    paperclip_issue_id text,
+    created_at      timestamptz NOT NULL DEFAULT now()
+);
