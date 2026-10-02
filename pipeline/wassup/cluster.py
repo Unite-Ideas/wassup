@@ -143,7 +143,12 @@ def _process(conn: psycopg.Connection, batch: int, max_seconds: float) -> int:
         spare = [x["id"] for x in conn.execute(
             "SELECT nextval('stories_id_seq') AS id FROM generate_series(1, %s)", (len(rows),)).fetchall()]
         new_stories, centroids, item_updates = [], {}, []
+        bad = [r["id"] for r, v in zip(rows, vecs) if not v.any()]
+        if bad:
+            conn.execute("UPDATE items SET status = 'error' WHERE id = ANY(%s)", (bad,))
         for r, v in zip(rows, vecs):
+            if not v.any():
+                continue
             seen = r["published_at"].timestamp()
             sid, sim = _index.nearest(v, not_before=seen - window * 3600)
             if sid is not None and sim >= threshold:

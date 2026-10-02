@@ -99,6 +99,16 @@ def store_items(conn: psycopg.Connection, source_id: int, items: list[RawItem]) 
     now = datetime.now(timezone.utc)
     place_cache: dict[str, int] = {}
     entity_cache: dict[tuple[str, str], int] = {}
+    # Collectors run in parallel and share the places and entities tables. Create any new
+    # rows first, in a fixed order, and commit at once, so two collectors never hold locks
+    # on the same rows in opposite orders (which deadlocks).
+    flagged = {id(it): places_with_title_flag(it) for it in items}
+    places = {p.key: p for pl in flagged.values() for p, _ in pl}
+    for key in sorted(places):
+        _place_id(conn, places[key], place_cache)
+    for kind, name in sorted({e for it in items for e in it.entities}):
+        _entity_id(conn, kind, name, entity_cache)
+    conn.commit()
     new = 0
     for it in items:
         if not it.url or not it.title:
@@ -115,7 +125,7 @@ def store_items(conn: psycopg.Connection, source_id: int, items: list[RawItem]) 
             continue
         new += 1
         item_id = row["id"]
-        for p, in_title in places_with_title_flag(it):
+        for p, in_title in flagged[id(it)]:
             conn.execute("INSERT INTO item_places (item_id, place_id, in_title) VALUES (%s, %s, %s) ON CONFLICT DO NOTHING",
                          (item_id, _place_id(conn, p, place_cache), in_title))
         for kind, name in it.entities:

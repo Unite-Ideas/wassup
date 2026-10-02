@@ -161,7 +161,8 @@ def story(story_id: int) -> dict:
                WHERE i.story_id = %s ORDER BY i.published_at DESC LIMIT 300""", (story_id,)).fetchall()
         places = conn.execute(
             """SELECT p.id, p.name, p.country, p.kind, p.lat, p.lon, sp.weight FROM story_places sp
-               JOIN places p ON p.id = sp.place_id WHERE sp.story_id = %s ORDER BY sp.weight DESC""", (story_id,)).fetchall()
+               JOIN places p ON p.id = sp.place_id WHERE sp.story_id = %s
+               ORDER BY sp.weight DESC, (p.kind = 'country'), p.id""", (story_id,)).fetchall()
         entities = conn.execute(
             """SELECT e.id, e.kind, e.name, count(*) mentions FROM items i JOIN item_entities ie ON ie.item_id = i.id
                JOIN entities e ON e.id = ie.entity_id WHERE i.story_id = %s

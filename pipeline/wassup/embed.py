@@ -21,6 +21,10 @@ def as_array(v) -> np.ndarray:
     return np.asarray(v, dtype=np.float32)
 
 
+class _ServerError(Exception):
+    pass
+
+
 class Embedder:
     name = "base"
 
@@ -53,18 +57,47 @@ class OllamaEmbedder(Embedder):
         self.model = model
         self.client = httpx.Client(timeout=120)
 
-    def embed(self, texts: list[str]) -> np.ndarray:
+    def _post(self, texts: list[str]) -> np.ndarray:
         try:
             r = self.client.post(f"{self.url}/api/embed", json={"model": self.model, "input": texts, "truncate": True})
         except httpx.ConnectError as e:
             raise RuntimeError(f"Ollama is not reachable at {self.url}. Start Ollama, or set EMBED_BACKEND=hash to run without it.") from e
         if r.status_code == 404:
             raise RuntimeError(f"Ollama does not have the embedding model '{self.model}'. Run: ollama pull {self.model}")
+        if r.status_code >= 500:
+            raise _ServerError(r.text[:300])
         r.raise_for_status()
         vecs = np.array(r.json()["embeddings"], dtype=np.float32)
         if vecs.shape[1] != DIM:
             raise ValueError(f"{self.model} returns {vecs.shape[1]} dimensions, schema expects {DIM}. Use bge-m3 or change db/schema.sql.")
-        return _normalize(vecs)
+        return vecs
+
+    def embed(self, texts: list[str]) -> np.ndarray:
+        vecs = self._embed(texts)
+        if len(texts) > 1 and not vecs.any():
+            # Every input failed: Ollama itself is broken, not one odd headline.
+            raise RuntimeError(f"Ollama failed to embed every input with {self.model}. Check the Ollama window or logs on Windows.")
+        return vecs
+
+    def _embed(self, texts: list[str]) -> np.ndarray:
+        """Embed a batch. Some inputs make Ollama fail (bge-m3 can produce NaN for odd text), and
+        one bad input fails the whole request, so on a server error the batch is split until the
+        bad input is found. It is retried once in a cleaned up form; if that fails too its row is
+        all zeros, which the caller treats as "could not embed"."""
+        try:
+            return _normalize(self._post(texts))
+        except _ServerError as e:
+            if len(texts) > 1:
+                mid = len(texts) // 2
+                return np.vstack([self._embed(texts[:mid]), self._embed(texts[mid:])])
+            cleaned = " ".join(_TOKEN.findall(texts[0]))[:400]
+            if cleaned and cleaned != texts[0]:
+                try:
+                    return _normalize(self._post([cleaned]))
+                except _ServerError:
+                    pass
+            log.warning("ollama could not embed %r: %s", texts[0][:120], e)
+            return np.zeros((1, DIM), dtype=np.float32)
 
 
 _TOKEN = re.compile(r"\w+", re.UNICODE)
