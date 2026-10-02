@@ -1,0 +1,52 @@
+# Wassup: `docker compose up -d --build`, then open http://localhost:8000
+#
+# Ollama runs on the host (it gets the GPU directly). The app reaches it through
+# host.docker.internal. Settings come from .env (copy .env.example).
+
+services:
+  db:
+    build: ./db
+    environment:
+      POSTGRES_USER: wassup
+      POSTGRES_PASSWORD: wassup
+      POSTGRES_DB: wassup
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - wassup-db:/var/lib/postgresql/data
+    shm_size: 2g
+    command: >
+      postgres -c shared_buffers=8GB -c effective_cache_size=32GB -c work_mem=128MB
+               -c maintenance_work_mem=2GB -c max_connections=100
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wassup -d wassup"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  app:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://wassup:wassup@db:5432/wassup
+      OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
+      EMBED_BACKEND: ${EMBED_BACKEND:-ollama}
+      EMBED_MODEL: ${EMBED_MODEL:-bge-m3}
+      TRIAGE_BACKEND: ${TRIAGE_BACKEND:-hybrid}
+      TRIAGE_MODEL: ${TRIAGE_MODEL:-qwen3:8b}
+      CONGRESS_API_KEY: ${CONGRESS_API_KEY:-}
+      GDELT_BACKFILL_FILES: ${GDELT_BACKFILL_FILES:-16}
+      WASSUP_CONFIG_DIR: /app/config
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - ./config:/app/config   # edit desks, interests and sources without rebuilding
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+volumes:
+  wassup-db:

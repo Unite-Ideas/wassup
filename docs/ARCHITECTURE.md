@@ -73,6 +73,8 @@ The excluded category combined with the "connects to a larger story" check handl
 
 We run both backends side by side at first and compare them. If Jev is clearly better per dollar we lean on it. If the local model is close enough, we stay local.
 
+**Status (Phase 0):** Jev is not wired in, since early access is not available yet. The `Decider` interface is in place (`pipeline/wassup/triage/decider.py`) with two working backends: `RulesDecider` (keywords, URL patterns, GDELT themes) and `OllamaDecider` (local LLM with a JSON schema). `HybridDecider` is the confidence gated router described above. A `JevDecider` is one new class when access arrives.
+
 ---
 
 ## 3. Sources
@@ -170,10 +172,11 @@ A dark, dense, analyst style desktop web app.
 | Area | Choice | Why |
 | --- | --- | --- |
 | Pipeline workers | Python | Best libraries for scraping, text extraction, NLP, embeddings, Whisper |
-| API and agent runtime | TypeScript (Node) | Matches Paperclip, shares types with the UI |
-| UI | React, Vite, globe.gl / three.js, Sigma.js | Rich 3D and graph visuals |
+| API | Python (FastAPI) | Shares code and models with the pipeline. Phase 0 change from the original plan |
+| Agent runtime (Phase 1) | TypeScript (Node) | Matches Paperclip. Talks to the Wassup API over HTTP |
+| UI | React, Vite, globe.gl / three.js, force-graph | Rich 3D globe and canvas evidence board |
 | Database | Postgres 16 with pgvector and PostGIS | One store for text, vectors, geo, and graph edges |
-| Queue | Postgres backed job queue at first, NATS or Redis later | Fewer moving parts for the proof of concept |
+| Queue | Item status column in Postgres, NATS or Redis later | Fewer moving parts for the proof of concept |
 | Local models | Ollama at first, vLLM later for throughput | Ollama is easy. vLLM gets far more out of the GPU |
 | Embeddings | bge-m3 (multilingual) | Strong cross-language matching, so a Farsi and an English article about the same event cluster together |
 | Translation | Local LLM or NLLB | Stays local |
@@ -201,13 +204,21 @@ Alternative if you want maximum performance later: dual boot or dedicate the mac
 
 ## 9. Roadmap
 
-**Phase 0: prove the data and the visual (no agents yet)**
+**Phase 0: prove the data and the visual (no agents yet)** (built)
 - Docker Compose: Postgres (pgvector, PostGIS)
 - Collectors: GDELT, about 50 RSS feeds, Congress.gov, Federal Register
 - Normalizer: text extraction, language detection, dedupe, bge-m3 embeddings, geotag, clustering
 - Triage through the `Decider` interface (local first, Jev behind a flag)
 - Globe UI with real stories, clickable locations and stories, similarity based links, and a basic timeline
 - Done when: you open the globe and see today's world news filtered to your interests, and clicking around works
+- Also built ahead of schedule: breaking detection, the evidence board, timeline replay, thumbs up and down feedback, Senate roll call votes
+
+Phase 0 implementation notes:
+- Clustering is per item against the stories active in the last 72 hours, using an exact in memory search over their centroids (no index tuning, millisecond lookups at this scale). A database only ever holds vectors from one embedder; `wassup rebuild-stories` re-clusters after a model change.
+- Triage runs per story, not per article, and again whenever a story doubles in size, which keeps model calls to a small fraction of incoming articles.
+- Each story's location is the place most of its articles mention, with places named in headlines counting triple.
+- Links: "related" when centroid similarity is just below the same story threshold, "same_actor" when two stories share at least two people or organizations that appear in fewer than 15 stories (so a head of state does not link everything).
+- Known gaps to address in Phase 1: GDELT geotags are noisy for some stories (a Bogota neighborhood called Kennedy); near duplicate stories still appear when phrasing differs a lot; no translation of non English headlines yet.
 
 **Phase 1: the newsroom**
 - Install Paperclip locally, create the Wassup company
