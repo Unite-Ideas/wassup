@@ -4,6 +4,7 @@ import { MeshPhongMaterial, Color } from "three";
 import { feature } from "topojson-client";
 import type { Topology, GeometryCollection } from "topojson-specification";
 import countriesTopo from "world-atlas/countries-110m.json";
+import { polygonToCells } from "h3-js";
 import type { Desk, GlobeData, Place, Selection, Story, StoryDetail } from "../lib/types";
 import { deskColor, escapeHtml, hexToRgba } from "../lib/format";
 
@@ -35,14 +36,61 @@ interface Arc {
 }
 
 const topo = countriesTopo as unknown as Topology<{ countries: GeometryCollection }>;
-const COUNTRIES = (feature(topo, topo.objects.countries) as unknown as GeoJSON.FeatureCollection).features;
+const HEX_RES = 3;
 
+/** Outlines the hex library can tile. A few shapes in the source data (North Korea in the
+ * 110m set) make it throw, and one throw stops every country after it from being drawn, so
+ * each polygon is checked up front: kept, repaired, or dropped. */
+function tileable(features: GeoJSON.Feature[]): GeoJSON.Feature[] {
+  const ok = (poly: number[][][]) => {
+    try {
+      polygonToCells(poly, HEX_RES, true);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  const repair = (poly: number[][][]) =>
+    poly.map((ring) => ring
+      .map(([x, y]) => [Math.round(x * 1000) / 1000, Math.round(y * 1000) / 1000])
+      .filter((pt, i, arr) => i === 0 || pt[0] !== arr[i - 1][0] || pt[1] !== arr[i - 1][1]));
+  const out: GeoJSON.Feature[] = [];
+  for (const f of features) {
+    const g = f.geometry;
+    if (!g || (g.type !== "Polygon" && g.type !== "MultiPolygon")) continue;
+    const polys = (g.type === "Polygon" ? [g.coordinates] : g.coordinates) as number[][][][];
+    const good = polys.map((p) => (ok(p) ? p : ok(repair(p)) ? repair(p) : null)).filter((p): p is number[][][] => p !== null);
+    if (good.length) out.push({ ...f, geometry: { type: "MultiPolygon", coordinates: good } });
+  }
+  return out;
+}
+
+const COUNTRIES = tileable((feature(topo, topo.objects.countries) as unknown as GeoJSON.FeatureCollection).features);
+
+// Places are flat glowing discs sized by how many stories mention them.
 function pointSize(p: Place) {
-  return 0.14 + Math.min(0.55, Math.sqrt(p.story_count) * 0.07);
+  return 0.12 + Math.min(0.85, Math.sqrt(p.story_count) * 0.09);
 }
 
 function pointHeight(p: Place) {
-  return 0.004 + Math.min(0.11, Math.log2(1 + p.story_count) * 0.014);
+  return 0.0025 + Math.min(0.006, p.story_count * 0.0002);
+}
+
+/** The busiest places that are not crowding each other: a label is skipped when a busier
+ * one is already shown nearby, so "Russia" and "Moscow" or "Israel" and "Tel Aviv" do not
+ * print on top of each other. */
+function declutter(places: Place[], max: number, minDeg: number): Place[] {
+  const chosen: Place[] = [];
+  for (const p of [...places].sort((a, b) => b.story_count - a.story_count)) {
+    const crowded = chosen.some((c) => {
+      const dLat = c.lat - p.lat;
+      const dLon = (c.lon - p.lon) * Math.cos((p.lat * Math.PI) / 180);
+      return Math.hypot(dLat, dLon) < minDeg;
+    });
+    if (!crowded) chosen.push(p);
+    if (chosen.length >= max) break;
+  }
+  return chosen;
 }
 
 export default function GlobeView(props: Props) {
@@ -61,7 +109,7 @@ export default function GlobeView(props: Props) {
       .atmosphereAltitude(0.13)
       .globeMaterial(new MeshPhongMaterial({ color: new Color("#06101a"), emissive: new Color("#03101a"), shininess: 4, transparent: false }))
       .hexPolygonsData(COUNTRIES)
-      .hexPolygonResolution(3)
+      .hexPolygonResolution(HEX_RES)
       .hexPolygonMargin(0.42)
       .hexPolygonUseDots(false)
       .hexPolygonColor(() => "rgba(0, 229, 255, 0.17)")
@@ -71,7 +119,7 @@ export default function GlobeView(props: Props) {
       .pointLng("lon")
       .pointAltitude((d: object) => pointHeight(d as Place))
       .pointRadius((d: object) => pointSize(d as Place))
-      .pointResolution(10)
+      .pointResolution(24)
       .pointsMerge(false)
       .pointsTransitionDuration(400)
       .pointLabel((d: object) => {
@@ -133,6 +181,7 @@ export default function GlobeView(props: Props) {
     const ro = new ResizeObserver(([e]) => g.width(e.contentRect.width).height(e.contentRect.height));
     ro.observe(el.current);
     globe.current = g;
+    (window as unknown as { __wassupGlobe?: GlobeInstance }).__wassupGlobe = g; // handy for debugging in the browser console
     const node = el.current;
     return () => {
       ro.disconnect();
@@ -208,7 +257,7 @@ export default function GlobeView(props: Props) {
     const fs = focusId != null ? storyById.get(focusId) : null;
     if (fs?.lat != null) rings.push({ lat: fs.lat, lon: fs.lon, accent: true });
     g.ringsData(rings);
-    g.labelsData(props.showLabels ? [...places].sort((a, b) => b.story_count - a.story_count).slice(0, 28) : []);
+    g.labelsData(props.showLabels ? declutter(places, 40, 4.5) : []);
   }, [props.data, props.desks, props.selection, props.showLabels, focusId, storyById]);
 
   useEffect(() => {

@@ -9,6 +9,8 @@ Output:
 
 Usage:
   python scripts/build_gazetteer.py /path/to/countryInfo.txt /path/to/cities15000.zip
+
+Country centers (country_centroids.tsv) come from ui/scripts/build_country_centroids.mjs.
 """
 import csv
 import io

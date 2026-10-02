@@ -37,6 +37,19 @@ def init_schema() -> None:
     # Extensions must exist before register_vector runs, so use a plain connection here.
     with psycopg.connect(settings().database_url, autocommit=True) as conn:
         conn.execute(sql)
+        sync_country_places(conn)
+
+
+def sync_country_places(conn: psycopg.Connection) -> None:
+    """Move country places to the gazetteer's current coordinates (they used to sit on the
+    capital), along with any story whose main location is a country."""
+    from .geo import gazetteer
+
+    with conn.cursor() as cur:
+        cur.executemany("UPDATE places SET lat = %s, lon = %s WHERE key = %s AND (lat <> %s OR lon <> %s)",
+                        [(p.lat, p.lon, p.key, p.lat, p.lon) for p in gazetteer().countries.values()])
+        cur.execute("""UPDATE stories s SET lat = p.lat, lon = p.lon FROM places p
+                       WHERE s.primary_place_id = p.id AND p.key LIKE 'cc:%%' AND (s.lat <> p.lat OR s.lon <> p.lon)""")
 
 
 def kv_get(conn: psycopg.Connection, key: str, default=None):

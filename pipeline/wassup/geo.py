@@ -129,11 +129,19 @@ class Gazetteer:
         self.cities: list[Place] = []
         names: dict[str, Place] = {}
 
+        # Country markers go at the middle of the country (largest landmass), not on the
+        # capital, so "Russia" and "Moscow" do not sit on top of each other.
+        centers: dict[str, tuple[float, float]] = {}
+        if (data_dir / "country_centroids.tsv").exists():
+            with open(data_dir / "country_centroids.tsv", encoding="utf-8") as fh:
+                for row in csv.DictReader(fh, delimiter="\t"):
+                    centers[row["iso2"]] = (float(row["lat"]), float(row["lon"]))
+
         with open(data_dir / "countries.tsv", encoding="utf-8") as fh:
             for row in csv.DictReader(fh, delimiter="\t"):
                 if row["fips"]:
                     self.fips_to_iso[row["fips"]] = row["iso2"]
-                lat, lon = _f(row["lat"]), _f(row["lon"])
+                lat, lon = centers.get(row["iso2"], (_f(row["lat"]), _f(row["lon"])))
                 if lat is None:
                     continue
                 p = Place(f"cc:{row['iso2']}", row["name"], row["iso2"], "country", lat, lon)
