@@ -347,11 +347,12 @@ def _report(conn, agent: dict, issue_id: str | None, run_id: str | None, body: s
     try:
         if issue_id and agent.get("paperclip_api_key"):
             try:
-                Paperclip(token=agent["paperclip_api_key"]).update_issue(issue_id, run_id=run_id, status=status, comment=body)
+                Paperclip(token=agent["paperclip_api_key"]).update_issue(issue_id, run_id=run_id, status=status, comment=body,
+                                                                         executionPolicy=None)
                 return
             except PaperclipError as e:
                 log.info("agent could not close %s itself (%s); closing as the board", issue_id, e)
-            board(conn).update_issue(issue_id, status=status, comment=body)
+            board(conn).update_issue(issue_id, status=status, comment=body, executionPolicy=None)
         elif agent.get("log_issue_id"):
             board(conn).comment(agent["log_issue_id"], body)
     except (PaperclipError, RuntimeError) as e:

@@ -10,7 +10,7 @@ from pydantic import BaseModel
 
 from .. import db
 from . import store
-from .desk import handle_heartbeat
+from . import jobs
 from .manager import call_standup
 from .paperclip import config, public_url
 from .surge import SurgeRefused, request_surge, retire
@@ -27,14 +27,37 @@ def _check(conn, token: str | None) -> None:
 
 @router.post("/heartbeat")
 def heartbeat(payload: dict, x_wassup_token: str | None = Header(None)) -> dict:
-    """Called by Paperclip's HTTP adapter for desk and surge agents. Runs the agent's work
-    before answering, so Paperclip's run covers the whole thing."""
+    """Called by Paperclip's HTTP adapter for desk and surge agents. Paperclip waits at most 30
+    seconds, so the work is queued and this answers at once; the agent reports on its task and
+    closes it when the work is done (see jobs.py)."""
+    ctx = payload.get("context") or {}
     with db.connect() as conn:
         _check(conn, x_wassup_token)
-        try:
-            return handle_heartbeat(conn, payload)
-        except Exception as e:
-            raise HTTPException(500, f"agent run failed: {e}") from e
+        agent = store.get_agent(conn, paperclip_id=payload.get("agentId"))
+    key = ctx.get("issueId") or f"agent:{payload.get('agentId')}"
+    if ctx.get("wakeReason") == "finish_successful_run_handoff" and jobs.busy(key):
+        return {"ok": True, "status": "still working"}  # Paperclip checking in; the report is on its way
+    accepted = jobs.submit(key, payload)
+    if accepted and agent and ctx.get("issueId"):
+        _hold(agent, ctx["issueId"], payload.get("runId"))
+    return {"ok": True, "status": "accepted" if accepted else "already working"}
+
+
+def _hold(agent: dict, issue_id: str, run_id: str | None) -> None:
+    """Tell Paperclip the agent owns the next step on this task, so it does not post "needs a
+    disposition" notices while the work runs past the end of the heartbeat. The monitor is a
+    check back in 30 minutes, in case the work dies; closing the task clears it."""
+    from datetime import datetime, timedelta, timezone
+
+    from .paperclip import Paperclip, PaperclipError
+
+    when = (datetime.now(timezone.utc) + timedelta(minutes=30)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+    try:
+        Paperclip(token=agent["paperclip_api_key"]).update_issue(issue_id, run_id=run_id, executionPolicy={"monitor": {
+            "nextCheckAt": when, "kind": "external_service", "serviceName": "Wassup desk runtime",
+            "notes": f"{agent['name']} is working on the local model; its report will be posted here."}})
+    except PaperclipError as e:
+        log.info("could not set a monitor on %s: %s", issue_id, e)
 
 
 @router.get("/status")

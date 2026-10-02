@@ -54,7 +54,11 @@ class Extractive:
     with NEWSROOM_LLM=extractive."""
 
     def __call__(self, prompt: str, schema: dict) -> dict:
+        import os
         import re
+        import time
+
+        time.sleep(float(os.environ.get("NEWSROOM_FAKE_DELAY", "0")))  # to test slow runs
 
         props = schema.get("properties", {})
         listed = re.findall(r"^\[(\d+)\] (.+?)(?: \||$)", prompt, re.M)
