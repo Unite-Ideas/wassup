@@ -264,7 +264,8 @@ def maybe_standup(conn: psycopg.Connection, agent: dict, llm: LLM, summary: str)
 # --- the heartbeat endpoint ---------------------------------------------------------------
 
 def report_markdown(agent: dict, report: dict, standup: str | None = None) -> str:
-    lines = [f"**{agent['name']}** check in. {report.get('summary', '')}".strip()]
+    kind = "answer" if report.get("answer") else "check in"
+    lines = [f"**{agent['name']}** {kind}. {report.get('summary', '')}".strip()]
     if report.get("stories_reviewed") is not None:
         lines.append(f"\nReviewed {report['stories_reviewed']} stories.")
     for b in report.get("briefs", []):

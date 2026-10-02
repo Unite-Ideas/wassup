@@ -106,8 +106,10 @@ def call_standup(conn: psycopg.Connection, requested_by: str, topic: str | None 
         for a in store.active_agents(conn, "desk"):
             try:
                 # A task wakes the desk now, and gives its report somewhere to live in Paperclip.
-                pc.create_issue(pcfg["company_id"], f"Standup #{sid}: report to the Editor in Chief",
-                                f"Report what you are tracking, what you suspect connects to other desks, and what you need."
+                # Paperclip treats a new issue with the same title and description as the same
+                # issue, so each desk's task names the desk.
+                pc.create_issue(pcfg["company_id"], f"Standup #{sid}: {a['name']} report",
+                                f"{a['name']}: report what you are tracking, what you suspect connects to other desks, and what you need."
                                 f"{f' Focus: {topic}' if topic else ''}", a["paperclip_agent_id"], project_id=pcfg.get("project_id"))
                 woke += 1
             except PaperclipError as e:
