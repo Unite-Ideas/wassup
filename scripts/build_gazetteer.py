@@ -30,6 +30,8 @@ def main(country_info: str, cities_zip: str) -> None:
                 gid, name, ascii_name, _alt, lat, lon, _fc, fcode, cc = row[:9]
                 pop = int(row[14] or 0)
                 is_capital = fcode == "PPLC"
+                if fcode == "PPLX":
+                    continue  # sections of a city (Kennedy in Bogota, Buda and Pest): they match names in headlines
                 if pop >= MIN_POP or is_capital:
                     cities.append((gid, name, ascii_name, cc, pop, int(is_capital), lat, lon))
 
