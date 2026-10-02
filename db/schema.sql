@@ -1,0 +1,154 @@
+-- Wassup database schema (Phase 0).
+-- Safe to run repeatedly: every statement is idempotent.
+
+CREATE EXTENSION IF NOT EXISTS vector;
+CREATE EXTENSION IF NOT EXISTS postgis;
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
+-- Where content comes from. trust_tier: A primary/wire, B independent, C partisan/low, S state media.
+CREATE TABLE IF NOT EXISTS sources (
+    id              serial PRIMARY KEY,
+    key             text UNIQUE NOT NULL,
+    name            text NOT NULL,
+    kind            text NOT NULL,              -- rss | gdelt | congress | federal_register
+    url             text,
+    country         text,                       -- ISO 3166-1 alpha-2
+    language        text,
+    trust_tier      char(1) NOT NULL DEFAULT 'B',
+    state_media     boolean NOT NULL DEFAULT false,
+    enabled         boolean NOT NULL DEFAULT true,
+    last_polled_at  timestamptz,
+    last_error      text,
+    item_count      bigint NOT NULL DEFAULT 0
+);
+
+-- One article, post, video, or document.
+CREATE TABLE IF NOT EXISTS items (
+    id              bigserial PRIMARY KEY,
+    source_id       integer NOT NULL REFERENCES sources(id),
+    outlet          text,                       -- publication name when the source is an aggregator (GDELT)
+    outlet_tier     char(1),                    -- tier of the outlet itself, overrides the source tier
+    outlet_state    boolean NOT NULL DEFAULT false,
+    url             text NOT NULL,
+    title           text NOT NULL,
+    summary         text,
+    language        text,
+    published_at    timestamptz NOT NULL,
+    collected_at    timestamptz NOT NULL DEFAULT now(),
+    status          text NOT NULL DEFAULT 'new', -- new | clustered | error
+    embedding       vector(1024),
+    story_id        bigint,
+    meta            jsonb NOT NULL DEFAULT '{}'::jsonb,
+    UNIQUE (url)
+);
+CREATE INDEX IF NOT EXISTS items_status_idx ON items (status) WHERE status = 'new';
+CREATE INDEX IF NOT EXISTS items_story_idx ON items (story_id);
+CREATE INDEX IF NOT EXISTS items_published_idx ON items (published_at);
+
+-- Named locations. key is stable per gazetteer: "gn:<geonameid>", "cc:<iso2>", "gdelt:<featureid>".
+CREATE TABLE IF NOT EXISTS places (
+    id              serial PRIMARY KEY,
+    key             text UNIQUE NOT NULL,
+    name            text NOT NULL,
+    country         text,
+    kind            text NOT NULL,              -- country | region | city
+    lat             double precision NOT NULL,
+    lon             double precision NOT NULL,
+    geom            geography(Point, 4326) GENERATED ALWAYS AS (ST_SetSRID(ST_MakePoint(lon, lat), 4326)::geography) STORED
+);
+CREATE INDEX IF NOT EXISTS places_geom_idx ON places USING gist (geom);
+
+CREATE TABLE IF NOT EXISTS item_places (
+    item_id         bigint NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+    place_id        integer NOT NULL REFERENCES places(id),
+    in_title        boolean NOT NULL DEFAULT false,  -- named in the headline, so it counts more
+    PRIMARY KEY (item_id, place_id)
+);
+CREATE INDEX IF NOT EXISTS item_places_place_idx ON item_places (place_id);
+
+CREATE TABLE IF NOT EXISTS entities (
+    id              serial PRIMARY KEY,
+    kind            text NOT NULL,              -- person | org
+    name            text NOT NULL,
+    norm            text NOT NULL,
+    UNIQUE (kind, norm)
+);
+
+CREATE TABLE IF NOT EXISTS item_entities (
+    item_id         bigint NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+    entity_id       integer NOT NULL REFERENCES entities(id),
+    PRIMARY KEY (item_id, entity_id)
+);
+CREATE INDEX IF NOT EXISTS item_entities_entity_idx ON item_entities (entity_id);
+
+-- A cluster of items about the same event.
+CREATE TABLE IF NOT EXISTS stories (
+    id                  bigserial PRIMARY KEY,
+    title               text NOT NULL,
+    title_tier          char(1) NOT NULL DEFAULT 'C',
+    centroid            vector(1024) NOT NULL,
+    item_count          integer NOT NULL DEFAULT 0,
+    source_count        integer NOT NULL DEFAULT 0,
+    country_count       integer NOT NULL DEFAULT 0,
+    language_count      integer NOT NULL DEFAULT 0,
+    first_seen          timestamptz NOT NULL,
+    last_seen           timestamptz NOT NULL,
+    desk                text,                   -- desk key, null when not routed
+    routed              boolean NOT NULL DEFAULT false, -- false means cold storage
+    excluded_reason     text,
+    significance        real NOT NULL DEFAULT 0, -- 0..5
+    relevance           real NOT NULL DEFAULT 0, -- 0..1, interest profile match
+    breaking            boolean NOT NULL DEFAULT false,
+    velocity            real NOT NULL DEFAULT 0, -- items in the last hour
+    lat                 double precision,
+    lon                 double precision,
+    primary_place_id    integer REFERENCES places(id),
+    triage              jsonb NOT NULL DEFAULT '{}'::jsonb,
+    triaged_item_count  integer NOT NULL DEFAULT 0,
+    updated_at          timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS stories_last_seen_idx ON stories (last_seen);
+CREATE INDEX IF NOT EXISTS stories_routed_idx ON stories (routed, last_seen);
+CREATE INDEX IF NOT EXISTS stories_title_trgm_idx ON stories USING gin (title gin_trgm_ops);
+
+CREATE TABLE IF NOT EXISTS story_places (
+    story_id        bigint NOT NULL REFERENCES stories(id) ON DELETE CASCADE,
+    place_id        integer NOT NULL REFERENCES places(id),
+    weight          integer NOT NULL DEFAULT 1,
+    PRIMARY KEY (story_id, place_id)
+);
+CREATE INDEX IF NOT EXISTS story_places_place_idx ON story_places (place_id);
+
+-- The strings on the wall. a < b so each pair is stored once per kind.
+CREATE TABLE IF NOT EXISTS story_links (
+    a               bigint NOT NULL REFERENCES stories(id) ON DELETE CASCADE,
+    b               bigint NOT NULL REFERENCES stories(id) ON DELETE CASCADE,
+    kind            text NOT NULL,              -- related | same_actor | (agent kinds in Phase 1)
+    weight          real NOT NULL,
+    evidence        jsonb NOT NULL DEFAULT '{}'::jsonb,
+    created_by      text NOT NULL DEFAULT 'rule',
+    created_at      timestamptz NOT NULL DEFAULT now(),
+    updated_at      timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (a, b, kind),
+    CHECK (a < b)
+);
+CREATE INDEX IF NOT EXISTS story_links_b_idx ON story_links (b);
+
+-- Thumbs up (+1) and down (-1) from the UI. Trains the interest profile.
+CREATE TABLE IF NOT EXISTS feedback (
+    id              bigserial PRIMARY KEY,
+    story_id        bigint NOT NULL REFERENCES stories(id) ON DELETE CASCADE,
+    value           smallint NOT NULL CHECK (value IN (-1, 1)),
+    created_at      timestamptz NOT NULL DEFAULT now()
+);
+
+-- Small key/value store for pipeline bookkeeping (last GDELT file seen, etc).
+CREATE TABLE IF NOT EXISTS kv (
+    key             text PRIMARY KEY,
+    value           jsonb NOT NULL,
+    updated_at      timestamptz NOT NULL DEFAULT now()
+);
+
+-- Upgrades for databases created by earlier versions.
+ALTER TABLE item_places ADD COLUMN IF NOT EXISTS in_title boolean NOT NULL DEFAULT false;
+DROP INDEX IF EXISTS stories_centroid_idx;

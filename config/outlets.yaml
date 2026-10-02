@@ -1,0 +1,18 @@
+# Trust tiers for outlets by web domain. Used for GDELT, which covers tens of thousands of outlets.
+# A: wires and primary sources, B: established independent, C: partisan or low reliability,
+# S: state media (always flagged). Anything not listed is U (unknown) and ranks below B.
+# Subdomains match their parent (edition.cnn.com matches cnn.com).
+
+suffix_tiers:
+  .gov: A
+  .mil: A
+  .gov.uk: A
+  .gc.ca: A
+  .europa.eu: A
+  un.org: A
+
+domains:
+  A: [reuters.com, apnews.com, afp.com, ap.org, bloomberg.com, un.org, who.int, unhcr.org, iom.int, nato.int, iaea.org, icc-cpi.int, reliefweb.int]
+  B: [bbc.co.uk, bbc.com, nytimes.com, washingtonpost.com, theguardian.com, wsj.com, ft.com, economist.com, npr.org, pbs.org, cnn.com, nbcnews.com, cbsnews.com, abcnews.go.com, usatoday.com, latimes.com, politico.com, politico.eu, thehill.com, axios.com, rollcall.com, propublica.org, dw.com, france24.com, euronews.com, lemonde.fr, spiegel.de, zeit.de, faz.net, elpais.com, corriere.it, repubblica.it, nos.nl, rfi.fr, cbc.ca, theglobeandmail.com, abc.net.au, smh.com.au, scmp.com, japantimes.co.jp, asahi.com, nikkei.com, hindustantimes.com, thehindu.com, indianexpress.com, timesofindia.indiatimes.com, dawn.com, kyivindependent.com, pravda.com.ua, ukrinform.net, meduza.io, themoscowtimes.com, novayagazeta.eu, timesofisrael.com, haaretz.com, jpost.com, ynetnews.com, al-monitor.com, thenationalnews.com, arabnews.com, iranintl.com, radiofarda.com, rferl.org, voanews.com, bellingcat.com, defensenews.com, breakingdefense.com, militarytimes.com, kyivpost.com, theatlantic.com, newyorker.com, time.com, newsweek.com, independent.co.uk, telegraph.co.uk, thetimes.co.uk, sky.com, news.sky.com, irishtimes.com, mercopress.com, premiumtimesng.com, dailymaverick.co.za, nation.africa]
+  C: [foxnews.com, breitbart.com, dailywire.com, nypost.com, dailymail.co.uk, thesun.co.uk, motherjones.com, theintercept.com, huffpost.com, msnbc.com, salon.com, thegatewaypundit.com, zerohedge.com, middleeasteye.net, almayadeen.net, thedebrief.org, newsmax.com, oann.com, rawstory.com, dailykos.com, theblaze.com]
+  S: [rt.com, sputnikglobe.com, sputniknews.com, tass.com, tass.ru, ria.ru, rg.ru, tvzvezda.ru, 1tv.ru, presstv.ir, tehrantimes.com, irna.ir, en.irna.ir, mehrnews.com, tasnimnews.com, farsnews.ir, isna.ir, xinhuanet.com, news.cn, cgtn.com, globaltimes.cn, chinadaily.com.cn, people.com.cn, ecns.cn, kcna.kp, rodong.rep.kp, telesurtv.net, aljazeera.com, aljazeera.net, trtworld.com, aa.com.tr, sana.sy, belta.by, granma.cu, en.yna.co.kr, yna.co.kr, spa.gov.sa, wam.ae, qna.org.qa, almanar.com.lb, vietnamplus.vn]

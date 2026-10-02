@@ -1,0 +1,58 @@
+# News desks. Each story is routed to at most one desk (the best match).
+# keywords: matched as whole words or phrases in titles and summaries, case insensitive.
+# themes: GDELT GKG theme prefixes that count toward the desk.
+# countries: ISO2 codes. A story located there gets a small boost toward this desk.
+# priority: when two desks tie, the higher priority wins. world_watch is the catch all and goes last.
+# In Phase 1 each desk becomes a Paperclip agent with the same scope.
+
+desks:
+  - key: us_politics
+    name: US Politics and Congress
+    color: "#4FA3FF"
+    keywords: [congress, congressional, senate, senator, senators, "house of representatives", congressman, congresswoman, lawmakers, "white house", trump, vance, "supreme court", filibuster, impeachment, impeach, "executive order", cabinet, republicans, republican, democrats, democrat, gop, midterm, midterms, "speaker of the house", "house speaker", "government shutdown", appropriations, "senate vote", "house vote", hearing, subpoena, pentagon, "attorney general", doj, fbi, "secretary of state", hegseth, rubio]
+    themes: [LEGISLATION, ELECTION, USPEC_POLITICS, TAX_FNCACT_PRESIDENT, EPU_POLICY_GOVERNMENT]
+    countries: [US]
+
+  - key: russia_ukraine
+    name: Russia and Ukraine
+    color: "#FFC24F"
+    keywords: [ukraine, ukrainian, ukrainians, kyiv, kiev, zelensky, zelenskyy, russia, russian, russians, kremlin, putin, moscow, donbas, donetsk, luhansk, crimea, kharkiv, zaporizhzhia, odesa, odessa, kherson, kursk, pokrovsk, lavrov, peskov, belousov, gerasimov, wagner, belarus, lukashenko, "black sea fleet", украина, россия, путин, зеленский, київ, україна]
+    themes: [ARMEDCONFLICT, MILITARY, CEASEFIRE]
+    countries: [UA, RU, BY, MD]
+
+  - key: iran_mideast
+    name: Iran and Middle East
+    color: "#FF5F56"
+    keywords: [iran, iranian, tehran, khamenei, irgc, pezeshkian, araghchi, israel, israeli, gaza, hamas, hezbollah, houthi, houthis, yemen, lebanon, lebanese, syria, syrian, damascus, iraq, iraqi, baghdad, idf, netanyahu, "west bank", saudi, riyadh, hormuz, natanz, fordow, isfahan, "uranium enrichment", "nuclear deal", qatar, doha, ایران, اسرائیل, غزة, إيران]
+    themes: [ARMEDCONFLICT, MILITARY, WMD, TERROR, CEASEFIRE]
+    countries: [IR, IL, PS, LB, SY, IQ, YE, SA, JO, AE, QA, BH, KW, OM, EG]
+
+  - key: un_international
+    name: UN and International Bodies
+    color: "#3DDC97"
+    keywords: ["united nations", "security council", "general assembly", guterres, unhcr, unicef, unrwa, "world health organization", "international criminal court", icc, icj, "world court", "nato summit", "nato allies", g7, g20, brics, iaea, wto, imf, "world bank", "european union", "european commission", "european council", "african union", asean, opec, treaty, summit, "un resolution", "peacekeepers", "peacekeeping", ambassador]
+    themes: [UNGP, PEACEKEEPING, NEGOTIATIONS, SANCTIONS]
+    countries: []
+
+  - key: gov_releases
+    name: Government Releases
+    color: "#C77DFF"
+    keywords: [epstein, maxwell, jfk, "kennedy files", "kennedy assassination", "rfk assassination", "mlk files", declassified, declassify, declassification, foia, "freedom of information", ufo, ufos, uap, uaps, aaro, "unidentified anomalous", "non-human", whistleblower, "classified documents", "document release", "documents released", "files released", unsealed, "national archives", "inspector general", "leaked documents", leaked, "flight logs", "grand jury"]
+    themes: [LEAK, SURVEILLANCE, SECURITY_SERVICES, CORRUPTION]
+    countries: []
+
+  - key: migration
+    name: Migration
+    color: "#2EC4D6"
+    keywords: [migrant, migrants, migration, refugee, refugees, asylum, "asylum seekers", deportation, deportations, deported, deportees, "border patrol", "border crossing", "border crossings", "ice agents", "ice raids", "ice detention", "immigration and customs enforcement", immigration, immigrants, displaced, displacement, smugglers, smuggling, "boat capsized", shipwreck, "small boats", "channel crossing", unhcr, iom, frontex, "darien gap"]
+    themes: [REFUGEES, IMMIGRATION, DISPLACED, BORDER]
+    countries: []
+
+  - key: world_watch
+    name: World Watch
+    color: "#A0AEC0"
+    priority: -1
+    description: Wars, coups, crises, and major power moves anywhere not covered by another desk.
+    keywords: [war, invasion, invade, invaded, airstrike, airstrikes, "air strike", missile, missiles, "drone strike", offensive, troops, militia, rebels, insurgents, junta, coup, "martial law", ceasefire, truce, "peace talks", massacre, genocide, "ethnic cleansing", famine, "humanitarian crisis", sanctions, assassination, assassinated, espionage, "state of emergency", uprising, "mass protests", crackdown, taiwan, "south china sea", "north korea", pyongyang, sudan, rsf, darfur, myanmar, sahel, "nuclear test", "ballistic missile"]
+    themes: [ARMEDCONFLICT, KILL, TERROR, REBELLION, COUP, PROTEST, MANMADE_DISASTER, CRISISLEX_CRISISLEXREC]
+    countries: []

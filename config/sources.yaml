@@ -1,0 +1,140 @@
+# RSS and Atom sources.
+# trust_tier: A primary documents and wires, B established independent, C partisan or low reliability, S state media.
+# state_media: true is always shown with a flag in the UI. Independent sources outweigh it.
+# Add as many as you like. The collector picks up changes on restart.
+# A few outlets (Times of Israel, Tehran Times, Anadolu, AllAfrica) block some networks or
+# user agents. Failures are recorded per source and shown at /api/sources; they do not stop the pipeline.
+
+rss:
+  # International and general
+  - {key: bbc_world, name: BBC World, url: "https://feeds.bbci.co.uk/news/world/rss.xml", country: GB, language: en, tier: B}
+  - {key: bbc_us_canada, name: BBC US and Canada, url: "https://feeds.bbci.co.uk/news/world/us_and_canada/rss.xml", country: GB, language: en, tier: B}
+  - {key: bbc_middle_east, name: BBC Middle East, url: "https://feeds.bbci.co.uk/news/world/middle_east/rss.xml", country: GB, language: en, tier: B}
+  - {key: bbc_europe, name: BBC Europe, url: "https://feeds.bbci.co.uk/news/world/europe/rss.xml", country: GB, language: en, tier: B}
+  - {key: bbc_asia, name: BBC Asia, url: "https://feeds.bbci.co.uk/news/world/asia/rss.xml", country: GB, language: en, tier: B}
+  - {key: bbc_africa, name: BBC Africa, url: "https://feeds.bbci.co.uk/news/world/africa/rss.xml", country: GB, language: en, tier: B}
+  - {key: bbc_latam, name: BBC Latin America, url: "https://feeds.bbci.co.uk/news/world/latin_america/rss.xml", country: GB, language: en, tier: B}
+  - {key: guardian_world, name: The Guardian World, url: "https://www.theguardian.com/world/rss", country: GB, language: en, tier: B}
+  - {key: guardian_us_politics, name: The Guardian US Politics, url: "https://www.theguardian.com/us-news/us-politics/rss", country: GB, language: en, tier: B}
+  - {key: nyt_world, name: New York Times World, url: "https://rss.nytimes.com/services/xml/rss/nyt/World.xml", country: US, language: en, tier: B}
+  - {key: nyt_politics, name: New York Times Politics, url: "https://rss.nytimes.com/services/xml/rss/nyt/Politics.xml", country: US, language: en, tier: B}
+  - {key: npr_world, name: NPR World, url: "https://feeds.npr.org/1004/rss.xml", country: US, language: en, tier: B}
+  - {key: npr_politics, name: NPR Politics, url: "https://feeds.npr.org/1014/rss.xml", country: US, language: en, tier: B}
+  - {key: cbs_world, name: CBS News World, url: "https://www.cbsnews.com/latest/rss/world", country: US, language: en, tier: B}
+  - {key: abc_intl, name: ABC News International, url: "https://abcnews.go.com/abcnews/internationalheadlines", country: US, language: en, tier: B}
+  - {key: dw_all, name: Deutsche Welle, url: "https://rss.dw.com/rdf/rss-en-all", country: DE, language: en, tier: B}
+  - {key: france24, name: France 24, url: "https://www.france24.com/en/rss", country: FR, language: en, tier: B}
+  - {key: euronews, name: Euronews, url: "https://www.euronews.com/rss?level=theme&name=news", country: FR, language: en, tier: B}
+  - {key: politico_eu, name: Politico Europe, url: "https://www.politico.eu/feed/", country: BE, language: en, tier: B}
+  - {key: cbc_world, name: CBC World, url: "https://www.cbc.ca/webfeed/rss/rss-world", country: CA, language: en, tier: B}
+  - {key: abc_au, name: ABC Australia, url: "https://www.abc.net.au/news/feed/51120/rss.xml", country: AU, language: en, tier: B}
+
+  # US politics and Congress
+  - {key: the_hill, name: The Hill, url: "https://thehill.com/news/feed/", country: US, language: en, tier: B}
+  - {key: roll_call, name: Roll Call, url: "https://rollcall.com/feed/", country: US, language: en, tier: B}
+  - {key: propublica, name: ProPublica, url: "https://www.propublica.org/feeds/propublica/main", country: US, language: en, tier: B}
+  - {key: the_intercept, name: The Intercept, url: "https://theintercept.com/feed/?rss", country: US, language: en, tier: C}
+  - {key: fox_politics, name: Fox News Politics, url: "https://moxie.foxnews.com/google-publisher/politics.xml", country: US, language: en, tier: C}
+  - {key: mother_jones, name: Mother Jones, url: "https://www.motherjones.com/feed/", country: US, language: en, tier: C}
+  - {key: breitbart, name: Breitbart, url: "https://feeds.feedburner.com/breitbart", country: US, language: en, tier: C}
+
+  # US government primary sources
+  - {key: whitehouse, name: The White House, url: "https://www.whitehouse.gov/news/feed/", country: US, language: en, tier: A}
+  - {key: whitehouse_actions, name: White House Presidential Actions, url: "https://www.whitehouse.gov/presidential-actions/feed/", country: US, language: en, tier: A}
+  - {key: state_dept, name: US State Department, url: "https://www.state.gov/rss-feed/press-releases/feed/", country: US, language: en, tier: A}
+  - {key: dod_releases, name: US Department of Defense, url: "https://www.defense.gov/DesktopModules/ArticleCS/RSS.ashx?ContentType=9&Site=945&max=20", country: US, language: en, tier: A}
+
+  # Government releases, FOIA, UAP
+  - {key: black_vault, name: The Black Vault, url: "https://www.theblackvault.com/documentarchive/feed/", country: US, language: en, tier: B}
+  - {key: the_debrief, name: The Debrief, url: "https://thedebrief.org/feed/", country: US, language: en, tier: C}
+  - {key: bellingcat, name: Bellingcat, url: "https://www.bellingcat.com/feed/", country: NL, language: en, tier: B}
+
+  # UN, humanitarian, migration
+  - {key: un_news, name: UN News, url: "https://news.un.org/feed/subscribe/en/news/all/rss.xml", country: US, language: en, tier: A}
+  - {key: un_migrants, name: UN News Migrants and Refugees, url: "https://news.un.org/feed/subscribe/en/news/topic/migrants-and-refugees/feed/rss.xml", country: US, language: en, tier: A}
+  - {key: reliefweb, name: ReliefWeb, url: "https://reliefweb.int/updates/rss.xml", country: CH, language: en, tier: A}
+
+  # Defense
+  - {key: defense_news, name: Defense News, url: "https://www.defensenews.com/arc/outboundfeeds/rss/", country: US, language: en, tier: B}
+  - {key: breaking_defense, name: Breaking Defense, url: "https://breakingdefense.com/feed/", country: US, language: en, tier: B}
+
+  # Russia and Ukraine
+  - {key: kyiv_independent, name: Kyiv Independent, url: "https://kyivindependent.com/news-archive/rss/", country: UA, language: en, tier: B}
+  - {key: ukrainska_pravda, name: Ukrainska Pravda, url: "https://www.pravda.com.ua/eng/rss/", country: UA, language: en, tier: B}
+  - {key: meduza, name: Meduza, url: "https://meduza.io/rss/en/all", country: LV, language: en, tier: B}
+  - {key: moscow_times, name: The Moscow Times, url: "https://www.themoscowtimes.com/rss/news", country: NL, language: en, tier: B}
+  - {key: tass, name: TASS, url: "https://tass.com/rss/v2.xml", country: RU, language: en, tier: S, state_media: true}
+  - {key: rt, name: RT, url: "https://www.rt.com/rss/news/", country: RU, language: en, tier: S, state_media: true}
+
+  # Iran and Middle East
+  - {key: aljazeera, name: Al Jazeera, url: "https://www.aljazeera.com/xml/rss/all.xml", country: QA, language: en, tier: S, state_media: true}
+  - {key: times_of_israel, name: Times of Israel, url: "https://www.timesofisrael.com/feed/", country: IL, language: en, tier: B}
+  - {key: middle_east_eye, name: Middle East Eye, url: "https://www.middleeasteye.net/rss", country: GB, language: en, tier: C}
+  - {key: presstv, name: Press TV, url: "https://www.presstv.ir/rss.xml", country: IR, language: en, tier: S, state_media: true}
+  - {key: tehran_times, name: Tehran Times, url: "https://www.tehrantimes.com/rss", country: IR, language: en, tier: S, state_media: true}
+  - {key: anadolu, name: Anadolu Agency, url: "https://www.aa.com.tr/en/rss/default?cat=guncel", country: TR, language: en, tier: S, state_media: true}
+
+  # Asia and Pacific
+  - {key: scmp, name: South China Morning Post, url: "https://www.scmp.com/rss/91/feed", country: HK, language: en, tier: B}
+  - {key: cgtn, name: CGTN, url: "https://www.cgtn.com/subscribe/rss/section/world.xml", country: CN, language: en, tier: S, state_media: true}
+  - {key: global_times, name: Global Times, url: "https://www.globaltimes.cn/rss/outbrain.xml", country: CN, language: en, tier: S, state_media: true}
+  - {key: yonhap, name: Yonhap, url: "https://en.yna.co.kr/RSS/news.xml", country: KR, language: en, tier: S, state_media: true}
+  - {key: times_of_india, name: Times of India World, url: "https://timesofindia.indiatimes.com/rssfeeds/296589292.cms", country: IN, language: en, tier: B}
+  - {key: dawn, name: Dawn, url: "https://www.dawn.com/feeds/home", country: PK, language: en, tier: B}
+
+  # Africa and Latin America
+  - {key: allafrica, name: AllAfrica, url: "https://allafrica.com/tools/headlines/rdf/latest/headlines.rdf", country: ZA, language: en, tier: B}
+  - {key: premium_times, name: Premium Times Nigeria, url: "https://www.premiumtimesng.com/feed", country: NG, language: en, tier: B}
+  - {key: mercopress, name: MercoPress, url: "https://en.mercopress.com/rss", country: UY, language: en, tier: B}
+
+  # Original language feeds
+  - {key: bbc_russian, name: BBC Russian, url: "https://feeds.bbci.co.uk/russian/rss.xml", country: GB, language: ru, tier: B}
+  - {key: bbc_ukrainian, name: BBC Ukrainian, url: "https://feeds.bbci.co.uk/ukrainian/rss.xml", country: GB, language: uk, tier: B}
+  - {key: bbc_persian, name: BBC Persian, url: "https://feeds.bbci.co.uk/persian/rss.xml", country: GB, language: fa, tier: B}
+  - {key: bbc_arabic, name: BBC Arabic, url: "https://feeds.bbci.co.uk/arabic/rss.xml", country: GB, language: ar, tier: B}
+  - {key: bbc_mundo, name: BBC Mundo, url: "https://feeds.bbci.co.uk/mundo/rss.xml", country: GB, language: es, tier: B}
+  - {key: bbc_chinese, name: BBC Chinese, url: "https://feeds.bbci.co.uk/zhongwen/simp/rss.xml", country: GB, language: zh, tier: B}
+
+gdelt:
+  enabled: true
+  translingual: true     # also pull GDELT's machine translated feed covering 65 languages
+  # GDELT emits about a thousand articles per 15 minutes per feed. These keep only articles
+  # GDELT tagged with at least one of these theme prefixes, so we do not ingest the whole web.
+  theme_prefixes:
+    - ARMEDCONFLICT
+    - MILITARY
+    - KILL
+    - TERROR
+    - WMD
+    - CEASEFIRE
+    - PEACEKEEPING
+    - NEGOTIATIONS
+    - SANCTIONS
+    - REBELLION
+    - COUP
+    - PROTEST
+    - REFUGEES
+    - IMMIGRATION
+    - DISPLACED
+    - BORDER
+    - LEGISLATION
+    - ELECTION
+    - USPEC_POLITICS
+    - TAX_FNCACT_PRESIDENT
+    - SURVEILLANCE
+    - CYBER_ATTACK
+    - CORRUPTION
+    - LEAK
+    # Broad themes such as LEADER, SECURITY_SERVICES, MANMADE_DISASTER, and CRISISLEX_* are on
+    # a large share of all articles, so they are left out on purpose.
+  min_themes_matched: 1
+
+congress:
+  enabled: true
+  # Get a free key at https://api.congress.gov/sign-up/ and set CONGRESS_API_KEY.
+  # Without a key Wassup falls back to the shared DEMO_KEY, which is often rate limited,
+  # plus the Senate roll call vote list, which needs no key.
+  api_key_env: CONGRESS_API_KEY
+
+federal_register:
+  enabled: true

@@ -1,0 +1,29 @@
+# Your interest profile.
+#
+# exclude: topics you do not care about. Matching stories go to cold storage: stored, searchable,
+#   shown only when you toggle cold storage on, and never researched unless an agent goes looking
+#   on purpose for a related story.
+# The exception: if a story ALSO strongly matches a desk (for example a celebrity caught up in an
+#   international scandal), the desk match wins and the story is routed anyway.
+#
+# include: extra topics that raise relevance. Wars and crises in general are covered by the
+#   World Watch desk in desks.yaml.
+#
+# Your thumbs up and thumbs down in the UI adjust relevance on top of these rules.
+
+exclude:
+  sports:
+    keywords: [football, soccer, nba, nfl, mlb, nhl, "super bowl", "world cup", "premier league", "champions league", "la liga", bundesliga, "serie a", olympics, olympic, tennis, wimbledon, golf, cricket, rugby, "formula 1", "formula one", "grand prix", nascar, quarterback, touchdown, playoff, playoffs, "transfer window", striker, midfielder, goalkeeper, "head coach", ufc, boxing, wrestling, marathon, "match report", fixtures, "box score", "fantasy football", athlete, athletes]
+    url_patterns: [/sport/, /sports/, /football/, /soccer/, /nba/, /nfl/, /cricket/, /tennis/, /golf/, /olympics/]
+  celebrity_entertainment:
+    keywords: [celebrity, celebrities, hollywood, kardashian, oscars, oscar, grammy, grammys, emmys, "box office", album, concert, "red carpet", actor, actress, singer, rapper, "pop star", "reality tv", "reality show", netflix, "tv series", "movie review", "film review", influencer, tiktoker, "music video", "world tour", "met gala", "royal family", "prince harry", meghan]
+    url_patterns: [/entertainment/, /celebrity/, /celebrities/, /showbiz/, /music/, /movies/, /film/, /tv/, /arts/, /culture/]
+  lifestyle:
+    keywords: [recipe, recipes, horoscope, fashion, "style guide", "travel deals", shopping, "gift guide", "product review", "best deals", "black friday", skincare, dating, wellness, diet, workout, "real estate listings", "home decor"]
+    url_patterns: [/lifestyle/, /style/, /travel/, /food/, /fashion/, /shopping/, /deals/, /wellness/, /horoscope/]
+
+include:
+  primary_sources:
+    keywords: [transcript, "full text", "court filing", indictment, unsealed, testimony, "roll call vote", "vote count", "executive order", "national security memorandum"]
+  power_and_diplomacy:
+    keywords: [summit, "state visit", "talks with", "meeting with", envoy, "foreign minister", "prime minister", regime, referendum, "snap election"]
