@@ -1,4 +1,4 @@
-import type { Brief, Desk, Filters, GlobeData, GraphData, NewsroomAgent, NewsroomEvent, NewsroomStatus, PlaceDetail, Stats, Story, StoryDetail, TimelineData } from "./types";
+import type { Brief, PlaceHit, Desk, Filters, GlobeData, GraphData, NewsroomAgent, NewsroomEvent, NewsroomStatus, PlaceDetail, Stats, Story, StoryDetail, TimelineData } from "./types";
 
 async function get<T>(path: string, params?: Record<string, string | number | boolean | undefined>): Promise<T> {
   const qs = new URLSearchParams();
@@ -22,6 +22,15 @@ export const api = {
   place: (id: number, p: ReturnType<typeof filterParams>) => get<PlaceDetail>(`/places/${id}`, p),
   graph: (id: number, depth = 2) => get<GraphData>(`/graph/${id}`, { depth, max_nodes: 70 }),
   timeline: (p: { since: string; until: string; desks?: string; cold: boolean; buckets: number }) => get<TimelineData>("/timeline", p),
+  placeSearch: (q: string) => get<PlaceHit[]>("/search/places", { q }),
+  fixLocation: async (id: number, body: { place_id?: number | null; place_key?: string; off_map?: boolean }) => {
+    const res = await fetch(`/api/stories/${id}/location`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) throw new Error(`location fix failed: ${res.status}`);
+  },
   newsroomStatus: () => get<NewsroomStatus>("/newsroom/status"),
   newsroomAgents: () => get<NewsroomAgent[]>("/newsroom/agents"),
   newsroomEvents: (limit = 80) => get<NewsroomEvent[]>("/newsroom/events", { limit }),

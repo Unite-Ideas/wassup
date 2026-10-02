@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import type { Desk, Item, StoryDetail } from "../lib/types";
 import { EXCLUDED_LABEL, TIER_LABEL, ago, deskColor, languageName, stamp } from "../lib/format";
 import { Markdown } from "../lib/markdown";
+import LocationFix from "./LocationFix";
 
 interface Props {
   story: StoryDetail | null;
@@ -12,6 +13,7 @@ interface Props {
   onSelectPlace: (id: number) => void;
   onOpenBoard: (id: number) => void;
   onFeedback: (id: number, v: 1 | -1) => void;
+  onChanged: () => void;
 }
 
 const TIER_ORDER = { A: 0, B: 1, U: 2, C: 3, S: 4 } as const;
@@ -63,7 +65,7 @@ function ItemRow({ it }: { it: Item & { copies: number } }) {
   );
 }
 
-export default function StoryPanel({ story, loading, desks, onClose, onSelectStory, onSelectPlace, onOpenBoard, onFeedback }: Props) {
+export default function StoryPanel({ story, loading, desks, onClose, onSelectStory, onSelectPlace, onOpenBoard, onFeedback, onChanged }: Props) {
   const [tab, setTab] = useState<Tab>("links");
   const [hideState, setHideState] = useState(false);
 
@@ -154,16 +156,7 @@ export default function StoryPanel({ story, loading, desks, onClose, onSelectSto
           </div>
         )}
 
-        {story.places.length > 0 && (
-          <div className="sub">
-            <div className="h">Locations</div>
-            <div className="chips">
-              {story.places.slice(0, 12).map((p) => (
-                <span key={p.id} className="chip click" onClick={() => onSelectPlace(p.id)}>⌖ {p.name}{p.country && p.kind !== "country" ? `, ${p.country}` : ""}</span>
-              ))}
-            </div>
-          </div>
-        )}
+        <LocationFix story={story} onSelectPlace={onSelectPlace} onChanged={onChanged} />
 
         <div className="tabs">
           <button className={tab === "links" ? "on" : ""} onClick={() => setTab("links")}>Connected<span>{story.links.length}</span></button>

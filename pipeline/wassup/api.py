@@ -19,9 +19,13 @@ app.include_router(newsroom_router)
 app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
                    allow_methods=["*"], allow_headers=["*"])
 
+# Places with less evidence than this (a stray tag that contradicts the headline) are kept but
+# not shown on the map.
+MIN_PLACE_WEIGHT = 0.15
+
 STORY_COLS = """s.id, coalesce(s.title_en, s.title) AS title, s.title AS title_original, s.title_tier, s.desk, s.routed, s.excluded_reason, s.significance, s.relevance,
     s.breaking, s.velocity, s.lat, s.lon, s.item_count, s.source_count, s.country_count, s.language_count,
-    s.first_seen, s.last_seen"""
+    s.first_seen, s.last_seen, s.primary_place_id, s.location_confidence, s.location_source, s.location_locked"""
 
 
 def _window(since: str | None, until: str | None, hours: float | None) -> tuple[datetime, datetime]:
@@ -123,7 +127,7 @@ def globe(since: str | None = None, until: str | None = None, hours: float | Non
                        max(s.significance) max_significance, bool_or(s.breaking) breaking,
                        mode() WITHIN GROUP (ORDER BY s.desk) top_desk
                 FROM story_places sp JOIN stories s ON s.id = sp.story_id JOIN places p ON p.id = sp.place_id
-                WHERE {w.where} GROUP BY p.id ORDER BY story_count DESC LIMIT 2000""", w.params).fetchall()
+                WHERE {w.where} AND sp.weight > {MIN_PLACE_WEIGHT} GROUP BY p.id ORDER BY story_count DESC LIMIT 2000""", w.params).fetchall()
         ids = [s["id"] for s in stories]
         links = conn.execute(
             """SELECT a, b, kind, weight, evidence, created_by FROM story_links
@@ -170,9 +174,10 @@ def story(story_id: int) -> dict:
                FROM items i JOIN sources src ON src.id = i.source_id
                WHERE i.story_id = %s ORDER BY i.published_at DESC LIMIT 300""", (story_id,)).fetchall()
         places = conn.execute(
-            """SELECT p.id, p.name, p.country, p.kind, p.lat, p.lon, sp.weight FROM story_places sp
+            """SELECT p.id, p.name, p.country, p.kind, p.lat, p.lon, sp.weight, (p.id = %s) AS is_primary FROM story_places sp
                JOIN places p ON p.id = sp.place_id WHERE sp.story_id = %s
-               ORDER BY sp.weight DESC, (p.kind = 'country'), p.id""", (story_id,)).fetchall()
+               ORDER BY (p.id = %s) DESC, sp.weight DESC, (p.kind = 'country'), p.id""",
+            (s["primary_place_id"], story_id, s["primary_place_id"])).fetchall()
         entities = conn.execute(
             """SELECT e.id, e.kind, e.name, count(*) mentions FROM items i JOIN item_entities ie ON ie.item_id = i.id
                JOIN entities e ON e.id = ie.entity_id WHERE i.story_id = %s
@@ -199,7 +204,7 @@ def place(place_id: int, since: str | None = None, until: str | None = None, hou
             raise HTTPException(404, "place not found")
         stories = conn.execute(
             f"""SELECT {STORY_COLS}, sp.weight place_weight FROM story_places sp JOIN stories s ON s.id = sp.story_id
-                WHERE sp.place_id = %(pid)s AND {w.where}
+                WHERE sp.place_id = %(pid)s AND sp.weight > {MIN_PLACE_WEIGHT} AND {w.where}
                 ORDER BY s.breaking DESC, s.significance DESC, s.last_seen DESC LIMIT 300""",
             {**w.params, "pid": place_id}).fetchall()
     return {**p, "stories": stories}
@@ -265,6 +270,60 @@ def timeline(since: str | None = None, until: str | None = None, hours: float | 
                 GROUP BY 1, 2 ORDER BY 1""",
             {**params, "lo": start.timestamp(), "hi": end.timestamp() + 1e-6, "n": buckets}).fetchall()
     return {"start": start, "end": end, "buckets": buckets, "counts": rows}
+
+
+@app.get("/api/search/places")
+def place_search(q: str = Query(..., min_length=2), limit: int = Query(12, le=40)) -> list[dict]:
+    """Places by name, from places already seen and the full gazetteer, for fixing a location."""
+    from .geo import gazetteer
+
+    ql = q.strip().lower()
+    with db.connect() as conn:
+        seen = conn.execute("SELECT id, key, name, country, kind, lat, lon FROM places WHERE name ILIKE %s ORDER BY kind = 'city' DESC, length(name) LIMIT %s",
+                            (f"{q.strip()}%", limit)).fetchall()
+    out = {r["key"]: r for r in seen}
+    g = gazetteer()
+    for p in list(g.countries.values()) + g.cities:
+        if len(out) >= limit:
+            break
+        if p.name.lower().startswith(ql) and p.key not in out:
+            out[p.key] = {"id": None, "key": p.key, "name": p.name, "country": p.country, "kind": p.kind, "lat": p.lat, "lon": p.lon}
+    return list(out.values())[:limit]
+
+
+class LocationIn(BaseModel):
+    place_id: int | None = None     # an existing place
+    place_key: str | None = None    # a gazetteer place not seen yet ("gn:703448", "cc:UA")
+    off_map: bool = False           # the story is not about a place
+
+
+@app.post("/api/stories/{story_id}/location")
+def fix_location(story_id: int, body: LocationIn) -> dict:
+    """Your correction: pin the story to a place, or take it off the map. The place it was on is
+    marked wrong for this story, and a place removed again and again is distrusted when GDELT's
+    tagger is its only support."""
+    from .collectors.base import _place_id
+    from .geo import gazetteer
+    from .locate import set_location
+
+    with db.connect() as conn:
+        st = conn.execute("SELECT primary_place_id FROM stories WHERE id = %s", (story_id,)).fetchone()
+        if not st:
+            raise HTTPException(404, "story not found")
+        place_id = body.place_id
+        if body.place_key and not place_id:
+            g = gazetteer()
+            p = next((x for x in list(g.countries.values()) + g.cities if x.key == body.place_key), None)
+            if not p:
+                raise HTTPException(404, "unknown place")
+            place_id = _place_id(conn, p, {})
+        if not place_id and not body.off_map:
+            raise HTTPException(400, "give place_id, place_key, or off_map")
+        old = st["primary_place_id"]
+        set_location(conn, story_id, None if body.off_map else place_id, "you",
+                     remove_place_id=old if old and old != place_id else None, record=True)
+        conn.commit()
+    return {"ok": True}
 
 
 class FeedbackIn(BaseModel):

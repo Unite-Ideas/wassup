@@ -250,3 +250,25 @@ CREATE TABLE IF NOT EXISTS api_usage (
     cost_usd        numeric(12, 6) NOT NULL DEFAULT 0,
     PRIMARY KEY (day, provider)
 );
+
+-- Location quality. Each place an article mentions carries an evidence weight; each story
+-- records how sure Wassup is of its location and where that came from. Verified or corrected
+-- locations are locked so new articles do not move them.
+ALTER TABLE item_places ADD COLUMN IF NOT EXISTS weight real NOT NULL DEFAULT 1;
+ALTER TABLE story_places ALTER COLUMN weight TYPE real;
+ALTER TABLE stories ADD COLUMN IF NOT EXISTS location_confidence real NOT NULL DEFAULT 0;
+ALTER TABLE stories ADD COLUMN IF NOT EXISTS location_source text;     -- headline | text | tagger | jev | model | you
+ALTER TABLE stories ADD COLUMN IF NOT EXISTS location_locked boolean NOT NULL DEFAULT false;
+ALTER TABLE stories ADD COLUMN IF NOT EXISTS location_checked_at timestamptz;
+ALTER TABLE stories ADD COLUMN IF NOT EXISTS location_checked_items integer NOT NULL DEFAULT 0;
+ALTER TABLE places ADD COLUMN IF NOT EXISTS false_positive_count integer NOT NULL DEFAULT 0;
+
+-- Your location fixes, kept so recurring mistakes can be spotted and learned from.
+CREATE TABLE IF NOT EXISTS location_corrections (
+    id              bigserial PRIMARY KEY,
+    story_id        bigint NOT NULL REFERENCES stories(id) ON DELETE CASCADE,
+    from_place_id   integer REFERENCES places(id),
+    to_place_id     integer REFERENCES places(id),    -- null means "not about a place"
+    by              text NOT NULL DEFAULT 'you',
+    created_at      timestamptz NOT NULL DEFAULT now()
+);

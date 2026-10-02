@@ -193,23 +193,37 @@ def refresh_stories(conn: psycopg.Connection, ids: list[int]) -> None:
     conn.execute("DELETE FROM story_places WHERE story_id = ANY(%s)", (ids,))
     conn.execute(
         """INSERT INTO story_places (story_id, place_id, weight)
-           SELECT i.story_id, ip.place_id, count(*) + 2 * count(*) FILTER (WHERE ip.in_title)
+           SELECT i.story_id, ip.place_id, sum(ip.weight)
            FROM items i JOIN item_places ip ON ip.item_id = i.id
            WHERE i.story_id = ANY(%s) GROUP BY 1, 2""",
         (ids,),
     )
+    # Main location: the place with the most evidence (cities before countries on a tie). Its
+    # share of all the evidence is the confidence, and the source says what backs it. Locked
+    # locations (verified, or fixed by you) stay put.
     conn.execute(
-        """WITH best AS (
-             SELECT DISTINCT ON (sp.story_id) sp.story_id, p.id place_id, p.lat, p.lon
+        """WITH ev AS (
+             SELECT sp.story_id, p.id place_id, p.lat, p.lon, p.kind, sp.weight,
+                    sum(sp.weight) OVER (PARTITION BY sp.story_id) total,
+                    row_number() OVER (PARTITION BY sp.story_id ORDER BY sp.weight DESC, (p.kind = 'country'), p.id) rn
              FROM story_places sp JOIN places p ON p.id = sp.place_id
-             WHERE sp.story_id = ANY(%(ids)s)
-             ORDER BY sp.story_id, sp.weight DESC, (p.kind = 'country'), p.id),
+             WHERE sp.story_id = ANY(%(ids)s) AND sp.weight > 0.15),
+           best AS (SELECT * FROM ev WHERE rn = 1),
+           src AS (
+             SELECT i.story_id, ip.place_id, bool_or(ip.in_title) in_title,
+                    bool_or(i.meta->>'feed' IS NULL) from_text
+             FROM items i JOIN item_places ip ON ip.item_id = i.id
+             WHERE i.story_id = ANY(%(ids)s) GROUP BY 1, 2),
            cc AS (
              SELECT sp.story_id, count(DISTINCT p.country) n FROM story_places sp JOIN places p ON p.id = sp.place_id
-             WHERE sp.story_id = ANY(%(ids)s) GROUP BY 1)
+             WHERE sp.story_id = ANY(%(ids)s) AND sp.weight > 0.15 GROUP BY 1)
            UPDATE stories st SET primary_place_id = best.place_id, lat = best.lat, lon = best.lon,
-                  country_count = coalesce(cc.n, 0)
-           FROM best LEFT JOIN cc ON cc.story_id = best.story_id WHERE st.id = best.story_id""",
+                  country_count = coalesce(cc.n, 0),
+                  location_confidence = round((best.weight / nullif(best.total, 0))::numeric, 3),
+                  location_source = CASE WHEN src.in_title THEN 'headline' WHEN src.from_text THEN 'text' ELSE 'tagger' END
+           FROM best LEFT JOIN cc ON cc.story_id = best.story_id
+                LEFT JOIN src ON src.story_id = best.story_id AND src.place_id = best.place_id
+           WHERE st.id = best.story_id AND NOT st.location_locked""",
         {"ids": ids},
     )
     refresh_headlines(conn, ids)

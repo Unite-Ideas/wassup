@@ -25,6 +25,7 @@ class RawItem:
     places: list[Place] = field(default_factory=list)
     entities: list[tuple[str, str]] = field(default_factory=list)  # (kind, name)
     meta: dict = field(default_factory=dict)
+    outlet_country: str | None = None  # ISO2 of the outlet's home country, when known
 
 
 class Collector:
@@ -82,16 +83,52 @@ def _entity_id(conn: psycopg.Connection, kind: str, name: str, cache: dict[tuple
     return row["id"]
 
 
-def places_with_title_flag(it: RawItem) -> list[tuple[Place, bool]]:
-    """The item's places, flagged when the headline names them. Places named in the headline
-    but missing from the list are added, since the headline is the strongest location signal."""
-    in_title = gazetteer().find(it.title)
-    keys = {p.key for p in in_title}
-    countries = {p.country for p in in_title}
-    out = [(p, p.key in keys or (p.kind == "country" and p.country in countries)) for p in it.places]
+def weighted_places(it: RawItem, distrusted: set[str] | frozenset = frozenset()) -> list[tuple[Place, bool, float]]:
+    """The item's places with how much evidence each one has, as (place, named in headline, weight).
+
+    The headline is the strongest signal. Places from GDELT's tagger come with the order they
+    appear in the article: the first few count fully, later ones (often photo captions or
+    asides) much less. A GDELT place that contradicts the headline's country, with nothing in
+    the headline or summary backing it, is nearly ignored, as is one you have removed from
+    stories before. The outlet's home country gets a small boost.
+    """
+    from ..geo import country_of_domain
+
+    gaz = gazetteer()
+    title_places = gaz.find(it.title)
+    text_places = gaz.find(f"{it.title}. {it.summary or ''}", limit=8)
+    title_keys = {p.key for p in title_places}
+    title_countries = {p.country for p in title_places if p.country}
+    text_countries = {p.country for p in text_places if p.country}
+    text = f"{it.title} {it.summary or ''}".lower()
+    tagged = it.meta.get("feed") is not None  # GDELT items carry places from GDELT's own tagger
+    home = it.outlet_country or (country_of_domain(it.url) if tagged else None)
+
+    out: list[tuple[Place, bool, float]] = []
+    for rank, p in enumerate(it.places):
+        in_title = p.key in title_keys or (p.kind == "country" and p.country in title_countries)
+        if in_title:
+            w = 3.0
+        elif not tagged:
+            w = 1.0  # found by the gazetteer in the headline or summary text
+        else:
+            w = max(0.25, 1.0 - 0.2 * rank)
+            named = p.name.lower() in text
+            supported = named or p.country in text_countries
+            if not supported and title_countries and p.country not in title_countries:
+                w = 0.1  # contradicts the headline, with nothing to back it up
+            elif not supported and p.key in distrusted:
+                w *= 0.2
+        if home and p.country == home:
+            w += 0.3
+        out.append((p, in_title, round(w, 3)))
     have = {p.key for p in it.places}
-    out += [(p, True) for p in in_title if p.key not in have]
+    out += [(p, True, 3.0) for p in title_places if p.key not in have]
     return out
+
+
+def places_with_title_flag(it: RawItem) -> list[tuple[Place, bool]]:
+    return [(p, t) for p, t, _ in weighted_places(it)]
 
 
 def store_items(conn: psycopg.Connection, source_id: int, items: list[RawItem]) -> int:
@@ -102,8 +139,9 @@ def store_items(conn: psycopg.Connection, source_id: int, items: list[RawItem]) 
     # Collectors run in parallel and share the places and entities tables. Create any new
     # rows first, in a fixed order, and commit at once, so two collectors never hold locks
     # on the same rows in opposite orders (which deadlocks).
-    flagged = {id(it): places_with_title_flag(it) for it in items}
-    places = {p.key: p for pl in flagged.values() for p, _ in pl}
+    distrusted = {r["key"] for r in conn.execute("SELECT key FROM places WHERE false_positive_count >= 2")}
+    flagged = {id(it): weighted_places(it, distrusted) for it in items}
+    places = {p.key: p for pl in flagged.values() for p, _, _ in pl}
     for key in sorted(places):
         _place_id(conn, places[key], place_cache)
     for kind, name in sorted({e for it in items for e in it.entities}):
@@ -125,9 +163,9 @@ def store_items(conn: psycopg.Connection, source_id: int, items: list[RawItem]) 
             continue
         new += 1
         item_id = row["id"]
-        for p, in_title in flagged[id(it)]:
-            conn.execute("INSERT INTO item_places (item_id, place_id, in_title) VALUES (%s, %s, %s) ON CONFLICT DO NOTHING",
-                         (item_id, _place_id(conn, p, place_cache), in_title))
+        for p, in_title, weight in flagged[id(it)]:
+            conn.execute("INSERT INTO item_places (item_id, place_id, in_title, weight) VALUES (%s, %s, %s, %s) ON CONFLICT DO NOTHING",
+                         (item_id, _place_id(conn, p, place_cache), in_title, weight))
         for kind, name in it.entities:
             conn.execute("INSERT INTO item_entities VALUES (%s, %s) ON CONFLICT DO NOTHING",
                          (item_id, _entity_id(conn, kind, name, entity_cache)))

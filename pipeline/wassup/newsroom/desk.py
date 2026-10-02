@@ -20,6 +20,7 @@ import psycopg
 from psycopg.types.json import Jsonb
 
 from ..config import load_yaml
+from ..locate import unlock
 from . import store
 from .llm import BOOL, INTS, LLM, NUM, STR, STRS, default_llm, obj
 from .paperclip import Paperclip, PaperclipError
@@ -52,8 +53,9 @@ def _story_line(i: int, s: dict) -> str:
         extra.append(f"BREAKING {s['velocity']:.0f}/hr")
     if s.get("new_items") is not None:
         extra.append(f"{s['new_items']} new")
+    where = f" | on the map at {s['place']}{', ' + s['place_country'] if s.get('place_country') and s['place_country'] not in s['place'] else ''}" if s.get("place") else ""
     return (f"[{i}] {s['title']} | {s['item_count']} articles, {s['source_count']} outlets, "
-            f"{s['country_count']} countries, significance {s['significance']:.1f}"
+            f"{s['country_count']} countries, significance {s['significance']:.1f}{where}"
             + (f" | {', '.join(extra)}" if extra else ""))
 
 
@@ -71,10 +73,11 @@ Decide:
 - important: indexes of the stories that genuinely matter (at most 5).
 - follow: indexes worth tracking over the coming days (at most 3). Keep following stories marked FOLLOWING if they are still developing.
 - unfollow: indexes marked FOLLOWING that are finished or no longer matter.
-- misrouted: indexes that do not belong on this desk or are not news the analyst wants (sports, celebrity, ads, trivia)."""
-    out = llm(prompt, obj(summary=STR, important=INTS, follow=INTS, unfollow=INTS, misrouted=INTS))
+- misrouted: indexes that do not belong on this desk or are not news the analyst wants (sports, celebrity, ads, trivia).
+- misplaced: indexes whose map location is clearly wrong for the story (for example a Canadian story placed in New Zealand)."""
+    out = llm(prompt, obj(summary=STR, important=INTS, follow=INTS, unfollow=INTS, misrouted=INTS, misplaced=INTS))
     n = len(queue)
-    for k in ("important", "follow", "unfollow", "misrouted"):
+    for k in ("important", "follow", "unfollow", "misrouted", "misplaced"):
         out[k] = [i for i in dict.fromkeys(out.get(k) or []) if isinstance(i, int) and 0 <= i < n]
     return out
 
@@ -177,6 +180,10 @@ def run_desk(conn: psycopg.Connection, agent: dict, llm: LLM) -> dict:
             continue  # the desk is unsure; a big story stays put
         conn.execute("UPDATE stories SET routed = false, excluded_reason = 'desk_dismissed' WHERE id = %s", (s["id"],))
         report["misrouted"].append(s["title"])
+    for i in review["misplaced"]:
+        unlock(conn, queue[i]["id"])  # the location check looks at it again on its next pass
+        store.event(conn, key, "misplaced", f"Location looks wrong: {queue[i]['title']} (on the map at {queue[i].get('place')})", queue[i]["id"])
+        report.setdefault("misplaced", []).append(queue[i]["title"])
     conn.commit()
 
     targets = list(dict.fromkeys(review["important"] + [i for i in review["follow"]] +
@@ -274,6 +281,8 @@ def report_markdown(agent: dict, report: dict, standup: str | None = None) -> st
             lines.append(f"- Connects to *{l['to']}* ({l['relation'].replace('_', ' ')}): {l['reason']}")
     if report.get("followed"):
         lines.append("\nNow following: " + "; ".join(report["followed"]))
+    if report.get("misplaced"):
+        lines.append("\nFlagged as misplaced on the map: " + "; ".join(report["misplaced"]))
     if report.get("misrouted"):
         lines.append("\nSent to cold storage as misrouted: " + "; ".join(report["misrouted"]))
     if report.get("answer"):

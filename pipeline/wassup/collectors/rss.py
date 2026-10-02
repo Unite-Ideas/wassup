@@ -50,6 +50,7 @@ def parse_feed(content: bytes, src: dict) -> list[RawItem]:
         items.append(RawItem(
             url=url, title=title, summary=summary, language=lang, published_at=_when(e),
             outlet=src["name"], outlet_tier=src.get("tier", "B"), outlet_state=bool(src.get("state_media")),
+            outlet_country=src.get("country"),
             places=places, meta={"tags": [t.get("term") for t in e.get("tags", []) if t.get("term")][:10]},
         ))
     return items

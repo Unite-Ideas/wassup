@@ -62,7 +62,7 @@ class Extractive:
         if "important" in props:
             n = len(listed)
             return {"summary": f"{n} stories moved. Leading: {listed[0][1] if listed else 'nothing'}.",
-                    "important": list(range(min(n, 3))), "follow": [0] if n else [], "unfollow": [], "misrouted": []}
+                    "important": list(range(min(n, 3))), "follow": [0] if n else [], "unfollow": [], "misrouted": [], "misplaced": []}
         if "brief" in props:
             return {"brief": " ".join(h.rstrip(".") + "." for h in heads[:3]) or "No coverage text available.",
                     "key_points": heads[:3], "watch_for": "", "escalate": False, "confidence": 0.3}

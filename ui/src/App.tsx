@@ -209,7 +209,8 @@ export default function App() {
       <aside className={`right panel ${panelOpen ? "" : "closed"}`}>
         {selection?.type === "story" && (
           <StoryPanel story={story} loading={loading.detail} desks={deskMap} onClose={() => setSelection(null)}
-            onSelectStory={selectStory} onSelectPlace={selectPlace} onOpenBoard={openBoard} onFeedback={feedback} />
+            onSelectStory={selectStory} onSelectPlace={selectPlace} onOpenBoard={openBoard} onFeedback={feedback}
+            onChanged={() => { loadStory(story!.id); setRefreshTick((x) => x + 1); }} />
         )}
         {selection?.type === "place" && (
           <PlacePanel place={place} loading={loading.detail} desks={deskMap} onClose={() => setSelection(null)} onSelectStory={selectStory} />

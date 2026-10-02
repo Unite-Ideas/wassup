@@ -70,7 +70,7 @@ COUNTRY_ALIASES = {
     "BR": ["Brazil", "Brazilian"],
     "AR": ["Argentina", "Argentine"],
     "HT": ["Haiti", "Haitian"],
-    "CA": ["Canada", "Canadian"],
+    "CA": ["Canada", "Canadian", "Ottawa's"],
     "AU": ["Australia", "Australian"],
     "SD": ["Sudan", "Sudanese"],
     "SS": ["South Sudan"],
@@ -153,6 +153,9 @@ class Gazetteer:
             if iso in self.countries:
                 for a in aliases:
                     names[a] = self.countries[iso]
+                    # Plural demonyms: Canadians, Iranians, Israelis, Afghans.
+                    if a[:1].isupper() and " " not in a and a.endswith(("an", "i")):
+                        names.setdefault(a + "s", self.countries[iso])
 
         capitals: dict[str, Place] = {}
         with open(data_dir / "cities.tsv", encoding="utf-8") as fh:
@@ -215,3 +218,22 @@ def _to_xyz(latlon: np.ndarray) -> np.ndarray:
 @lru_cache
 def gazetteer() -> Gazetteer:
     return Gazetteer()
+
+
+# Country code top level domains that differ from the ISO code.
+_TLD_ISO = {"uk": "GB"}
+# Generic suffixes under which a country code is the second to last label (bbc.co.uk, abc.net.au).
+_SECOND_LEVEL = {"co", "com", "net", "org", "gov", "ac", "gob", "gouv"}
+
+
+def country_of_domain(domain_or_url: str | None) -> str | None:
+    """The country an outlet's web domain points to (cbc.ca -> CA, abc.net.au -> AU), if any."""
+    if not domain_or_url:
+        return None
+    d = domain_or_url.split("//")[-1].split("/")[0].split(":")[0].lower()
+    labels = d.split(".")
+    tld = labels[-1] if labels else ""
+    if len(tld) != 2:
+        return None
+    iso = _TLD_ISO.get(tld, tld.upper())
+    return iso if gazetteer().country(iso) else None

@@ -85,9 +85,10 @@ def desk_queue(conn, desk: str, agent_key: str, since: datetime, limit: int) -> 
     """Stories on this desk with coverage since the last run, plus stories the desk follows
     that have new coverage, most significant first."""
     return conn.execute(
-        f"""SELECT {STORY_FIELDS}, (f.story_id IS NOT NULL) AS followed,
+        f"""SELECT {STORY_FIELDS}, (f.story_id IS NOT NULL) AS followed, pl.name AS place, pl.country AS place_country,
                    (SELECT count(*) FROM items i WHERE i.story_id = s.id AND i.collected_at > %(since)s) AS new_items
             FROM stories s LEFT JOIN follows f ON f.story_id = s.id AND f.agent_key = %(agent)s AND f.active
+                 LEFT JOIN places pl ON pl.id = s.primary_place_id
             WHERE s.last_seen > %(since)s AND ((s.routed AND s.desk = %(desk)s) OR f.story_id IS NOT NULL)
             ORDER BY (f.story_id IS NOT NULL) DESC, s.breaking DESC, s.significance DESC, s.item_count DESC
             LIMIT %(limit)s""",

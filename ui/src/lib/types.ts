@@ -27,6 +27,20 @@ export interface Story {
   language_count: number;
   first_seen: string;
   last_seen: string;
+  primary_place_id?: number | null;
+  location_confidence?: number;
+  location_source?: "headline" | "text" | "tagger" | "jev" | "model" | "you" | null;
+  location_locked?: boolean;
+}
+
+export interface PlaceHit {
+  id: number | null;
+  key: string;
+  name: string;
+  country: string | null;
+  kind: string;
+  lat: number;
+  lon: number;
 }
 
 export interface Place {
@@ -146,7 +160,7 @@ export interface StoryDetail extends Story {
     llm?: Record<string, unknown>;
   };
   items: Item[];
-  places: (Pick<Place, "id" | "name" | "country" | "kind" | "lat" | "lon"> & { weight: number })[];
+  places: (Pick<Place, "id" | "name" | "country" | "kind" | "lat" | "lon"> & { weight: number; is_primary: boolean })[];
   entities: Entity[];
   links: Neighbor[];
   feedback: number;
