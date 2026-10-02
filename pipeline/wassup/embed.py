@@ -90,17 +90,34 @@ class OllamaEmbedder(Embedder):
             if len(texts) > 1:
                 mid = len(texts) // 2
                 return np.vstack([self._embed(texts[:mid]), self._embed(texts[mid:])])
-            cleaned = " ".join(_TOKEN.findall(texts[0]))[:400]
-            if cleaned and cleaned != texts[0]:
+            for variant in _variants(texts[0]):
                 try:
-                    return _normalize(self._post([cleaned]))
+                    return _normalize(self._post([variant]))
                 except _ServerError:
-                    pass
+                    continue
             log.warning("ollama could not embed %r: %s", texts[0][:120], e)
             return np.zeros((1, DIM), dtype=np.float32)
 
 
 _TOKEN = re.compile(r"\w+", re.UNICODE)
+
+
+def _variants(text: str) -> list[str]:
+    """Rewordings to retry when bge-m3 in Ollama returns NaN for an input. The bug depends on
+    the exact text, so small changes (headline only, lower case, a short prefix) usually get
+    through, and the meaning, which is all clustering needs, stays the same."""
+    words = " ".join(_TOKEN.findall(text))
+    if not words:
+        return []  # nothing meaningful to embed
+    headline = text.split(". ")[0]
+    out = [words[:400], headline, headline.lower(), f"News: {headline}", words[:120], f"Report. {words[:200]}"]
+    seen, uniq = {text}, []
+    for v in out:
+        v = v.strip()
+        if v and v not in seen:
+            seen.add(v)
+            uniq.append(v)
+    return uniq
 _STOP = set("""a an the of to in on for and or but with at by from as is are was were be been it its this that
 these those after before over under into about says said will would can could has have had not no new
 than then their his her they them he she we you i our out up more most""".split())

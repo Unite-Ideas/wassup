@@ -76,3 +76,15 @@ def test_ollama_broken_for_everything_raises():
     e.client = httpx.Client(transport=httpx.MockTransport(lambda r: httpx.Response(500, text="boom")))
     with pytest.raises(RuntimeError, match="every input"):
         e.embed(["a b", "c d", "e f"])
+
+
+def test_nan_input_retried_with_variants():
+    # Fails on the exact text and on its plain word form, works once reworded.
+    def handler(request: httpx.Request):
+        t = json.loads(request.content)["input"]
+        if any(x in ("China-US summit ends. More text", "China US summit ends More text") or x.startswith("China-US summit ends. ") for x in t) or len(t) > 1:
+            return httpx.Response(500, text="NaN")
+        return httpx.Response(200, json={"embeddings": [[1.0] + [0.0] * (DIM - 1) for _ in t]})
+    e = OllamaEmbedder("http://ollama", "bge-m3")
+    e.client = httpx.Client(transport=httpx.MockTransport(handler))
+    assert e._embed(["China-US summit ends. More text"]).any()
