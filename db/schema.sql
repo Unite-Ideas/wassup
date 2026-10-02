@@ -239,3 +239,14 @@ CREATE TABLE IF NOT EXISTS escalations (
     paperclip_issue_id text,
     created_at      timestamptz NOT NULL DEFAULT now()
 );
+
+-- Paid API usage per day (Jev), so spend is visible and capped.
+CREATE TABLE IF NOT EXISTS api_usage (
+    day             date NOT NULL,
+    provider        text NOT NULL,
+    requests        integer NOT NULL DEFAULT 0,
+    input_tokens    bigint NOT NULL DEFAULT 0,
+    output_tokens   bigint NOT NULL DEFAULT 0,
+    cost_usd        numeric(12, 6) NOT NULL DEFAULT 0,
+    PRIMARY KEY (day, provider)
+);

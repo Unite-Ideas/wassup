@@ -20,40 +20,53 @@ log = logging.getLogger(__name__)
 
 
 class HybridDecider(Decider):
-    """Rules first. Ask the local LLM only when the rules are unsure and the story has more
-    than one article, which is where a second opinion is worth the GPU time."""
+    """Rules first. When the rules are unsure about a story with more than one article, ask for
+    a second opinion: Jev when it is configured (fast, cheap, calibrated), then the local LLM if
+    Jev is unsure too or unavailable."""
 
     name = "hybrid"
 
-    def __init__(self, rules: RulesDecider, llm: OllamaDecider, min_items: int = 2, unsure_below: float = 0.6):
-        self.rules, self.llm = rules, llm
-        self.min_items, self.unsure_below = min_items, unsure_below
+    def __init__(self, rules: RulesDecider, opinions: list, min_items: int = 2, unsure_below: float = 0.6,
+                 jev_trust_above: float = 0.55):
+        self.rules, self.opinions = rules, opinions
+        self.min_items, self.unsure_below, self.jev_trust_above = min_items, unsure_below, jev_trust_above
 
     def decide(self, ctx: StoryContext) -> Decision:
         d = self.rules.decide(ctx)
-        if d.confidence >= self.unsure_below or ctx.item_count < self.min_items or not self.llm.available():
+        if d.confidence >= self.unsure_below or ctx.item_count < self.min_items:
             return d
-        try:
-            l = self.llm.decide(ctx)
-        except Exception as e:
-            log.warning("llm triage failed for story %s: %s", ctx.id, e)
-            return d
-        l.significance = round((l.significance + d.significance) / 2, 2)
-        l.relevance = d.relevance if l.routed and d.routed else l.relevance
-        l.backend = "hybrid:llm"
-        l.notes = {**d.notes, **l.notes}
-        return l
+        for other in self.opinions:
+            if not other.available():
+                continue
+            try:
+                o = other.decide(ctx)
+            except Exception as e:
+                log.warning("%s triage failed for story %s: %s", other.name, ctx.id, e)
+                continue
+            if other.name == "jev" and o.confidence < self.jev_trust_above and other is not self.opinions[-1]:
+                d.notes["jev_unsure"] = o.notes.get("jev")
+                continue  # let the next opinion weigh in
+            o.significance = round((o.significance + d.significance) / 2, 2)
+            o.relevance = d.relevance if o.routed and d.routed else o.relevance
+            o.backend = f"hybrid:{other.name}"
+            o.notes = {**d.notes, **o.notes}
+            return o
+        return d
 
 
 def get_decider() -> Decider:
+    from .jev import JevDecider
+
     backend = settings().triage_backend
     rules = RulesDecider()
     if backend == "rules":
         return rules
-    llm = OllamaDecider()
+    jev, llm = JevDecider(), OllamaDecider()
+    if backend == "jev":
+        return HybridDecider(rules, [jev, llm], min_items=1, unsure_below=1.01)
     if backend == "ollama":
-        return HybridDecider(rules, llm, min_items=1, unsure_below=1.01)
-    return HybridDecider(rules, llm)
+        return HybridDecider(rules, [llm], min_items=1, unsure_below=1.01)
+    return HybridDecider(rules, [jev, llm])
 
 
 def _profile(conn: psycopg.Connection) -> tuple[np.ndarray | None, np.ndarray | None]:

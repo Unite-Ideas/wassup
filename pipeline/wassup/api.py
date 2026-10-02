@@ -89,8 +89,14 @@ def stats() -> dict:
                       (SELECT count(DISTINCT language) FROM items) languages,
                       (SELECT min(published_at) FROM items) oldest,
                       (SELECT max(published_at) FROM items) newest""").fetchone()
+        jev = conn.execute(
+            """SELECT coalesce(sum(cost_usd) FILTER (WHERE day = current_date), 0) today, coalesce(sum(cost_usd), 0) total,
+                      coalesce(sum(requests) FILTER (WHERE day = current_date), 0) requests_today
+               FROM api_usage WHERE provider = 'jev'""").fetchone()
     s = settings()
-    return {**r, "embed_backend": s.embed_backend, "triage_backend": s.triage_backend}
+    return {**r, "embed_backend": s.embed_backend, "triage_backend": s.triage_backend,
+            "jev": {"configured": bool(s.typesafe_api_key), "spent_today_usd": float(jev["today"]), "spent_total_usd": float(jev["total"]),
+                    "requests_today": jev["requests_today"], "daily_budget_usd": s.jev_daily_budget_usd}}
 
 
 @app.get("/api/sources")

@@ -36,6 +36,12 @@ class Settings:
     triage_backend: str = field(default_factory=lambda: _env("TRIAGE_BACKEND", "hybrid"))
     triage_model: str = field(default_factory=lambda: _env("TRIAGE_MODEL", "qwen3:8b"))
 
+    # Jev (TypeSafe AI): fast typed decisions for triage. Used when TYPESAFE_API_KEY is set.
+    typesafe_api_key: str = field(default_factory=lambda: _env("TYPESAFE_API_KEY", ""))
+    jev_model: str = field(default_factory=lambda: _env("JEV_MODEL", "jev-latest"))
+    jev_daily_budget_usd: float = field(default_factory=lambda: _env_float("JEV_DAILY_BUDGET_USD", 0.5))
+    jev_price_per_mtok: float = field(default_factory=lambda: _env_float("JEV_PRICE_PER_MTOK", 0.042))
+
     # Translation of non English headlines: "ollama" or "off". Uses the triage model unless set.
     translate_backend: str = field(default_factory=lambda: _env("TRANSLATE_BACKEND", "ollama"))
     translate_model: str = field(default_factory=lambda: _env("TRANSLATE_MODEL", "") or _env("TRIAGE_MODEL", "qwen3:8b"))
