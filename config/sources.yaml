@@ -68,7 +68,8 @@ rss:
 
   # Iran and Middle East
   - {key: aljazeera, name: Al Jazeera, url: "https://www.aljazeera.com/xml/rss/all.xml", country: QA, language: en, tier: S, state_media: true}
-  - {key: times_of_israel, name: Times of Israel, url: "https://www.timesofisrael.com/feed/", country: IL, language: en, tier: B}
+  # Times of Israel blocks feed readers (403); GDELT still carries its articles.
+  - {key: times_of_israel, name: Times of Israel, url: "https://www.timesofisrael.com/feed/", country: IL, language: en, tier: B, enabled: false}
   - {key: middle_east_eye, name: Middle East Eye, url: "https://www.middleeasteye.net/rss", country: GB, language: en, tier: C}
   - {key: presstv, name: Press TV, url: "https://www.presstv.ir/rss.xml", country: IR, language: en, tier: S, state_media: true}
   - {key: tehran_times, name: Tehran Times, url: "https://www.tehrantimes.com/rss", country: IR, language: en, tier: S, state_media: true}

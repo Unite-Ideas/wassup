@@ -14,6 +14,7 @@ the story goes quiet.
 from __future__ import annotations
 
 import logging
+import time
 from datetime import datetime, timedelta, timezone
 
 import psycopg
@@ -27,7 +28,9 @@ from .paperclip import Paperclip, PaperclipError
 
 log = logging.getLogger(__name__)
 
-NEWSROOM_BRIEF = """You are the {desk_name} desk at Wassup, a news intelligence service for one analyst.
+NEWSROOM_BRIEF = """Today is {today} (UTC). Use this and the times shown on the coverage for any dates
+you write; never guess a date.
+You are the {desk_name} desk at Wassup, a news intelligence service for one analyst.
 The analyst cares about wars, invasions, mass migration, US politics and Congress, the UN, and
 government document releases (Epstein, JFK, UAP, FOIA). Not sports or celebrity news unless it is
 part of a larger story. Be factual and concise. State media is propaganda: report what it claims,
@@ -36,6 +39,10 @@ but trust independent sources over it. Never invent facts that are not in the ma
 
 def _cfg() -> dict:
     return load_yaml("newsroom.yaml")
+
+
+def _preamble(desk_name: str) -> str:
+    return NEWSROOM_BRIEF.format(desk_name=desk_name, today=f"{datetime.now(timezone.utc):%A %B %-d, %Y %H:%M}")
 
 
 def _desk_name(desk: str | None) -> str:
@@ -63,7 +70,7 @@ def _story_line(i: int, s: dict) -> str:
 
 def review_queue(llm: LLM, desk_name: str, queue: list[dict]) -> dict:
     listing = "\n".join(_story_line(i, s) for i, s in enumerate(queue))
-    prompt = f"""{NEWSROOM_BRIEF.format(desk_name=desk_name)}
+    prompt = f"""{_preamble(desk_name)}
 
 These stories on your desk moved since your last check:
 {listing}
@@ -83,7 +90,7 @@ Decide:
 
 
 def write_brief(llm: LLM, desk_name: str, digest: dict) -> dict:
-    prompt = f"""{NEWSROOM_BRIEF.format(desk_name=desk_name)}
+    prompt = f"""{_preamble(desk_name)}
 
 Write a brief on this story from the coverage below. If there is a previous brief, update it: say
 what changed.
@@ -103,7 +110,7 @@ def find_links(llm: LLM, desk_name: str, story: dict, candidates: list[dict]) ->
     if not candidates:
         return []
     listing = "\n".join(f"[{i}] {c['title']} (desk: {_desk_name(c['desk'])})" for i, c in enumerate(candidates))
-    prompt = f"""{NEWSROOM_BRIEF.format(desk_name=desk_name)}
+    prompt = f"""{_preamble(desk_name)}
 
 Your story: {story['title']}
 Brief: {story.get('brief_text', '')}
@@ -124,7 +131,7 @@ none are connected."""
 
 def answer_directive(llm: LLM, desk_name: str, question: str, stories: list[dict]) -> dict:
     listing = "\n\n".join(store.digest_text(s) for s in stories) or "(no matching coverage found)"
-    prompt = f"""{NEWSROOM_BRIEF.format(desk_name=desk_name)}
+    prompt = f"""{_preamble(desk_name)}
 
 The Editor in Chief asked your desk:
 {question}
@@ -142,7 +149,7 @@ Return:
 
 def standup_report(llm: LLM, desk_name: str, summary: str, briefs: list[dict], topic: str | None) -> str:
     listing = "\n".join(f"- {b['title']}: {b['body'][:400]}" for b in briefs) or "- (no new briefs)"
-    prompt = f"""{NEWSROOM_BRIEF.format(desk_name=desk_name)}
+    prompt = f"""{_preamble(desk_name)}
 
 Standup. The Editor in Chief wants each desk's report{f' on: {topic}' if topic else ''}.
 Your current read of the desk: {summary}
@@ -311,13 +318,23 @@ def handle_heartbeat(conn: psycopg.Connection, payload: dict, llm: LLM | None = 
     is_directive = bool(issue_id) and not title.startswith(("Check in:", "Standup #"))
 
     try:
-        if is_directive:
-            report = run_directive(conn, agent, llm, title, issue.get("description") or "")
-        elif agent["kind"] == "surge":
-            report = run_surge(conn, agent, llm)
-        else:
-            report = run_desk(conn, agent, llm)
-        standup = maybe_standup(conn, agent, llm, report.get("summary", "")) if agent["kind"] == "desk" else None
+        for attempt in range(3):
+            try:
+                if is_directive:
+                    report = run_directive(conn, agent, llm, title, issue.get("description") or "")
+                elif agent["kind"] == "surge":
+                    report = run_surge(conn, agent, llm)
+                else:
+                    report = run_desk(conn, agent, llm)
+                standup = maybe_standup(conn, agent, llm, report.get("summary", "")) if agent["kind"] == "desk" else None
+                break
+            except (psycopg.errors.DeadlockDetected, psycopg.errors.SerializationFailure):
+                # Another desk or the pipeline held the same rows. Start the run over.
+                if attempt == 2:
+                    raise
+                conn.rollback()
+                log.warning("agent %s hit a database deadlock, retrying", agent["key"])
+                time.sleep(2 + 3 * attempt)
     except Exception as e:
         conn.rollback()
         store.event(conn, agent["key"], "error", f"{agent['name']} run failed: {e}")

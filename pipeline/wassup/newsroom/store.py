@@ -117,12 +117,12 @@ def story_digest(conn, story_id: int, max_items: int = 14) -> dict:
 def digest_text(d: dict) -> str:
     lines = [f"Story {d['id']}: {d['title']}",
              f"{d['item_count']} articles from {d['source_count']} outlets in {d['country_count']} countries"
-             f"{', BREAKING' if d['breaking'] else ''}. Places: {', '.join(d['places']) or 'unknown'}. "
+             f"{', BREAKING' if d['breaking'] else ''}, first seen {d['first_seen']:%b %d %H:%M}, latest {d['last_seen']:%b %d %H:%M} UTC. Places: {', '.join(d['places']) or 'unknown'}. "
              f"Actors: {', '.join(d['actors']) or 'unknown'}."]
     for it in d["items"]:
         flag = " [STATE MEDIA]" if it["state"] else ""
         summary = f" | {it['summary'][:220]}" if it.get("summary") else ""
-        lines.append(f"- ({it['outlet']}, tier {it['tier']}{flag}) {it['title']}{summary}")
+        lines.append(f"- ({it['outlet']}, tier {it['tier']}{flag}, {it['published_at']:%b %d %H:%M}) {it['title']}{summary}")
     if d.get("brief"):
         lines.append(f"Previous brief ({d['brief']['created_at']:%b %d %H:%M}): {d['brief']['body'][:900]}")
     return "\n".join(lines)

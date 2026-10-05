@@ -24,16 +24,26 @@ class OllamaJSON:
     def __init__(self, model: str | None = None, url: str | None = None):
         self.model = model or desk_model()
         self.url = (url or settings().ollama_url).rstrip("/")
-        self.client = httpx.Client(timeout=600)
+        self.client = httpx.Client(timeout=900)
 
     def __call__(self, prompt: str, schema: dict) -> dict:
-        r = self.client.post(f"{self.url}/api/chat", json={
-            "model": self.model, "stream": False, "think": False, "format": schema,
-            "options": {"temperature": 0.2, "num_ctx": 16384},
-            "messages": [{"role": "user", "content": prompt}],
-        })
-        r.raise_for_status()
-        return json.loads(r.json()["message"]["content"])
+        # The model is shared with triage and translation, so a call can wait a long time for its
+        # turn, and now and then it rambles until it runs out of room and the JSON is cut off.
+        # One more try, colder and with a firm length limit, fixes nearly all of these.
+        for attempt, temperature in enumerate((0.2, 0.0)):
+            try:
+                r = self.client.post(f"{self.url}/api/chat", json={
+                    "model": self.model, "stream": False, "think": False, "format": schema,
+                    "options": {"temperature": temperature, "num_ctx": 16384, "num_predict": 3000},
+                    "messages": [{"role": "user", "content": prompt}],
+                })
+                r.raise_for_status()
+                return json.loads(r.json()["message"]["content"])
+            except (httpx.TimeoutException, json.JSONDecodeError) as e:
+                if attempt:
+                    raise
+                log.warning("desk model call failed (%s), retrying", e)
+        raise AssertionError("unreachable")
 
 
 def obj(**props) -> dict:
