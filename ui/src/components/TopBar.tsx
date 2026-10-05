@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
-import type { Desk, Stats, Story } from "../lib/types";
+import type { Desk, Stats, Story, View } from "../lib/types";
 import { StoryCard } from "./StoryPanel";
 
 interface Props {
   stats: Stats | null;
-  view: "globe" | "board" | "newsroom";
-  onView: (v: "globe" | "board" | "newsroom") => void;
+  view: View;
+  onView: (v: View) => void;
   desks: Map<string, Desk>;
   onSelectStory: (id: number) => void;
 }
@@ -69,6 +69,7 @@ export default function TopBar({ stats, view, onView, desks, onSelectStory }: Pr
       </div>
       <div className="seg">
         <button className={view === "globe" ? "on" : ""} onClick={() => onView("globe")}>GLOBE</button>
+        <button className={view === "map" ? "on" : ""} onClick={() => onView("map")}>MAP</button>
         <button className={view === "board" ? "on" : ""} onClick={() => onView("board")}>BOARD</button>
         <button className={view === "newsroom" ? "on" : ""} onClick={() => onView("newsroom")}>NEWSROOM</button>
       </div>

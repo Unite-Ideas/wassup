@@ -24,6 +24,7 @@ class Settings:
     database_url: str = field(default_factory=lambda: _env("DATABASE_URL", "postgresql://wassup:wassup@localhost:5432/wassup"))
     config_dir: Path = field(default_factory=lambda: Path(_env("WASSUP_CONFIG_DIR", str(REPO_ROOT / "config"))))
     ui_dist: Path = field(default_factory=lambda: Path(_env("WASSUP_UI_DIST", str(REPO_ROOT / "ui" / "dist"))))
+    maps_dir: Path = field(default_factory=lambda: Path(_env("MAPS_DIR", str(REPO_ROOT / "data" / "maps"))))
 
     # Embeddings: "ollama" uses a local model (bge-m3 by default). "hash" is a dependency free
     # fallback that only matches shared words. Use it for tests or machines without Ollama.

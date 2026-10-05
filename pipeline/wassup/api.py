@@ -12,10 +12,12 @@ from pydantic import BaseModel
 
 from . import db
 from .config import load_yaml, settings
+from .maps_api import router as maps_router
 from .newsroom.api import router as newsroom_router
 
 app = FastAPI(title="Wassup", version="0.1.0")
 app.include_router(newsroom_router)
+app.include_router(maps_router)
 app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
                    allow_methods=["*"], allow_headers=["*"])
 

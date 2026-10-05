@@ -54,6 +54,7 @@ services:
       - "127.0.0.1:8000:8000"
     volumes:
       - ./config:/app/config   # edit desks, interests and sources without rebuilding
+      - ./data/maps:/app/data/maps   # map files from scripts/download_maps.sh
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped

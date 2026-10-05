@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, filterParams } from "./lib/api";
-import type { Desk, Filters, GlobeData, PlaceDetail, Selection, Stats, StoryDetail, TimelineData } from "./lib/types";
+import type { Desk, Filters, GlobeData, PlaceDetail, Selection, Stats, StoryDetail, TimelineData, View } from "./lib/types";
 import GlobeView from "./components/GlobeView";
 import BoardView from "./components/BoardView";
 import Timeline from "./components/Timeline";
@@ -9,6 +9,7 @@ import StoryPanel from "./components/StoryPanel";
 import PlacePanel from "./components/PlacePanel";
 import TopBar from "./components/TopBar";
 import NewsroomView from "./components/NewsroomView";
+import MapView from "./components/MapView";
 
 const HOUR = 3600e3;
 const REFRESH_MS = 60_000;
@@ -25,7 +26,9 @@ export default function App() {
 
   const [extentHours, setExtentHours] = useState(72);
   const [filters, setFilters] = useState<Filters>(() => ({ ...liveWindow(24 * HOUR), live: true, desks: new Set(), cold: false, minSig: 0 }));
-  const [view, setView] = useState<"globe" | "board" | "newsroom">("globe");
+  const [view, setView] = useState<View>("globe");
+  const [mapOpened, setMapOpened] = useState(false);
+  useEffect(() => { if (view === "map") setMapOpened(true); }, [view]);
   const [selection, setSelection] = useState<Selection>(null);
   const [boardRoot, setBoardRoot] = useState<number | null>(null);
   const [showLinks, setShowLinks] = useState(true);
@@ -199,6 +202,12 @@ export default function App() {
             <span><span className="live-dot" />breaking</span>
           </div>
         </div>
+        {mapOpened && (
+          <div style={{ position: "absolute", inset: 0, visibility: view === "map" ? "visible" : "hidden" }}>
+            <MapView data={globe} desks={deskMap} selection={selection} storyDetail={story} visible={view === "map"}
+              overlays={[]} onSelectStory={selectStory} />
+          </div>
+        )}
         {view === "newsroom" && <NewsroomView desks={deskMap} onSelectStory={selectStory} />}
         {view === "board" && (
           <BoardView rootId={boardRoot ?? storyId} selectedId={storyId} desks={deskMap} onSelectStory={selectStory} onReRoot={setBoardRoot} />

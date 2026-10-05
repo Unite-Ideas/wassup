@@ -1,3 +1,5 @@
+export type View = "globe" | "map" | "board" | "newsroom";
+
 export type Tier = "A" | "B" | "C" | "S" | "U";
 
 export interface Desk {
