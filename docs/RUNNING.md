@@ -113,7 +113,8 @@ Thumbs up and down in the story panel (MORE and LESS) teach the relevance model 
 | `TRIAGE_MODEL` | `qwen3:8b` | Any Ollama model that supports structured output |
 | `TRANSLATE_BACKEND` | `ollama` | Translate non English headlines into English, or `off` |
 | `TRANSLATE_MODEL` | (triage model) | Any Ollama chat model; qwen3 models translate well |
-| `CLUSTER_THRESHOLD` | 0.80 | Cosine similarity for "same story". Lower merges more |
+| `CLUSTER_THRESHOLD` | 0.75 | Cosine similarity for an article to join a story. Lower merges more |
+| `MERGE_THRESHOLD` | 0.78 | Cosine similarity at which two whole stories are merged (checked every 5 minutes) |
 | `LINK_THRESHOLD` | 0.62 | Cosine similarity for "related story" strings |
 | `RETENTION_DAYS` | 30 | After this many days, article and story vectors are dropped to save disk (articles themselves are kept). Minimum 15 |
 | `GDELT_BACKFILL_FILES` | 16 | 15 minute files fetched on first start |

@@ -149,7 +149,12 @@ One Postgres database with **pgvector** (similarity search) and **PostGIS** (geo
 
 - `sources`: outlet, country, language, trust tier, state media flag
 - `items`: one article, post, video, or document. Raw text, translation, embedding, time, geo points
-- `stories`: clusters of items about the same event. Summary, status, desk, significance, breaking flag
+- `stories`: clusters of items about the same event. Summary, status, desk, significance, breaking flag. An article joins the closest
+  live story when it is at least 0.75 similar (bge-m3, measured on real headlines); wire labels
+  such as "(LEAD)" or "BREAKING:" are ignored for this, and junk pages (legal pages, site
+  sections, job ads) are dropped at collection. Every 5 minutes, stories that grew side by side
+  but are the same event (0.78 or closer) are merged, and their briefs, follows and feedback move
+  with them
 - `entities`: people, organizations, countries, places (with aliases across languages)
 - `links`: typed, weighted edges between stories and entities: `involves`, `causes`, `responds_to`, `contradicts`, `same_actor`, `escalates`, `related`. Each link records who proposed it (agent or rule), confidence, and evidence item ids
 - `briefs`, `standups`: agent written notes tied to stories

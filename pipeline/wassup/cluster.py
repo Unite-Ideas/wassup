@@ -15,6 +15,7 @@ import psycopg
 from .config import settings
 from .db import kv_get, kv_set
 from .embed import DIM, as_array, get_embedder
+from .text import comparable_title
 
 log = logging.getLogger(__name__)
 
@@ -77,6 +78,22 @@ class ActiveIndex:
         i = int(np.argmax(sims))
         return self.ids[i], float(sims[i])
 
+    def candidates(self, min_items: int, not_before: float) -> np.ndarray:
+        """Positions of live stories with at least min_items articles."""
+        n = self.size
+        return np.flatnonzero((self._counts[:n] >= min_items) & (self._seen[:n] >= not_before))
+
+    def absorb(self, keep: int, gone: int) -> np.ndarray:
+        """Fold story gone into story keep; gone can never be matched again."""
+        a, b = self.pos[keep], self.pos[gone]
+        c = self._vecs[a] * self._counts[a] + self._vecs[b] * self._counts[b]
+        c /= np.linalg.norm(c) or 1.0
+        self._vecs[a] = c
+        self._counts[a] += self._counts[b]
+        self._seen[a] = max(self._seen[a], self._seen[b])
+        self._counts[b], self._seen[b] = 0, -np.inf
+        return c.copy()
+
     def vector(self, sid: int) -> np.ndarray:
         return self._vecs[self.pos[sid]].copy()
 
@@ -97,7 +114,7 @@ _index = ActiveIndex()
 
 
 def embed_text(title: str, summary: str | None) -> str:
-    return f"{title}. {(summary or '')[:300]}".strip()
+    return f"{comparable_title(title)}. {(summary or '')[:300]}".strip()
 
 
 def process_new(conn: psycopg.Connection, batch: int = 256, max_seconds: float = 60) -> int:
@@ -246,6 +263,95 @@ def refresh_headlines(conn: psycopg.Connection, ids: list[int]) -> None:
            FROM t WHERE st.id = t.story_id""",
         (ids,),
     )
+
+
+def merge_stories(conn: psycopg.Connection, max_merges: int = 500) -> int:
+    """Merge stories that turn out to be the same event.
+
+    Articles join a story one at a time, so the same event can start as two stories (say the
+    English wire copy and the foreign press) that then grow side by side. Every few minutes,
+    stories with new articles are compared with every other live story of two or more
+    articles, and any pair closer than the merge threshold becomes one story. The larger story
+    keeps its id; the other one's articles, briefs, follows, feedback and links move over.
+    """
+    try:
+        return _merge(conn, max_merges)
+    except Exception:
+        conn.rollback()
+        _index.loaded_at = 0
+        raise
+
+
+def _merge(conn: psycopg.Connection, max_merges: int) -> int:
+    s = settings()
+    at, window = s.merge_at(), s.cluster_window_hours
+    if not _index.loaded_at or time.time() - _index.loaded_at > 3600:
+        _index.load(conn, window)
+    since = kv_get(conn, "merge_since")
+    started = time.time()
+    rows = conn.execute(
+        "SELECT id FROM stories WHERE item_count >= 2 AND updated_at > coalesce(%s::timestamptz, '-infinity')",
+        (since,)).fetchall()
+    pool = _index.candidates(2, time.time() - window * 3600)
+    live = set(pool.tolist())
+    touched = np.array([_index.pos[r["id"]] for r in rows if _index.pos.get(r["id"]) in live], dtype=np.int64)
+    pairs = []
+    if len(touched) and len(pool):
+        pool_vecs = _index._vecs[pool]
+        for i in range(0, len(touched), 512):
+            chunk = touched[i:i + 512]
+            sims = _index._vecs[chunk] @ pool_vecs.T
+            sims[pool[None, :] == chunk[:, None]] = -1
+            r, c = np.nonzero(sims >= at)
+            pairs += [(float(sims[a, b]), int(chunk[a]), int(pool[b])) for a, b in zip(r, c)]
+    merged, gone = 0, set()
+    for sim, pa, pb in sorted(pairs, reverse=True):
+        a, b = _index.ids[pa], _index.ids[pb]
+        if a in gone or b in gone or a == b:
+            continue
+        # Each story may have drifted since this pass started; check again.
+        if float(_index._vecs[pa] @ _index._vecs[pb]) < at:
+            continue
+        keep, drop = (a, b) if (_index._counts[pa], -a) >= (_index._counts[pb], -b) else (b, a)
+        _absorb(conn, keep, drop)
+        gone.add(drop)
+        merged += 1
+        if merged >= max_merges:
+            break
+    kv_set(conn, "merge_since", conn.execute("SELECT now()::text AS t").fetchone()["t"] if merged < max_merges else since)
+    conn.commit()
+    if merged:
+        log.info("merged %d duplicate stories in %.1fs", merged, time.time() - started)
+    return merged
+
+
+def _absorb(conn: psycopg.Connection, keep: int, drop: int) -> None:
+    centroid = _index.absorb(keep, drop)
+    k, d = (conn.execute("SELECT routed, desk FROM stories WHERE id = %s", (x,)).fetchone() for x in (keep, drop))
+    had_feedback = conn.execute("SELECT 1 FROM feedback WHERE story_id = %s LIMIT 1", (drop,)).fetchone()
+    p = {"k": keep, "d": drop}
+    for sql in (
+        "UPDATE items SET story_id = %(k)s WHERE story_id = %(d)s",
+        "UPDATE feedback SET story_id = %(k)s WHERE story_id = %(d)s",
+        "UPDATE briefs SET story_id = %(k)s WHERE story_id = %(d)s",
+        "UPDATE newsroom_events SET story_id = %(k)s WHERE story_id = %(d)s",
+        "UPDATE newsroom_agents SET focus_story_id = %(k)s WHERE focus_story_id = %(d)s",
+        "UPDATE location_corrections SET story_id = %(k)s WHERE story_id = %(d)s",
+        """INSERT INTO follows (story_id, agent_key, reason, active, created_at)
+           SELECT %(k)s, agent_key, reason, active, created_at FROM follows WHERE story_id = %(d)s ON CONFLICT DO NOTHING""",
+        """INSERT INTO escalations (story_id, paperclip_issue_id, created_at)
+           SELECT %(k)s, paperclip_issue_id, created_at FROM escalations WHERE story_id = %(d)s ON CONFLICT DO NOTHING""",
+        """INSERT INTO story_links (a, b, kind, weight, evidence, created_by, created_at, updated_at)
+           SELECT least(o, %(k)s), greatest(o, %(k)s), kind, weight, evidence, created_by, created_at, updated_at
+           FROM (SELECT CASE WHEN a = %(d)s THEN b ELSE a END o, * FROM story_links WHERE %(d)s IN (a, b)) l
+           WHERE o <> %(k)s ON CONFLICT DO NOTHING""",
+        "DELETE FROM stories WHERE id = %(d)s",
+    ):
+        conn.execute(sql, p)
+    retriage = had_feedback or (k["routed"], k["desk"]) != (d["routed"], d["desk"])
+    conn.execute("UPDATE stories SET centroid = %s" + (", triaged_item_count = 0" if retriage else "") + " WHERE id = %s",
+                 (centroid, keep))
+    refresh_stories(conn, [keep])
 
 
 def rebuild_stories(conn: psycopg.Connection) -> int:

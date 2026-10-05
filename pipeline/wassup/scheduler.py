@@ -8,7 +8,7 @@ import time
 from typing import Callable
 
 from . import db
-from .cluster import process_new
+from .cluster import merge_stories, process_new
 from .collectors.base import Collector
 from .collectors.gdelt import GdeltCollector
 from .collectors.government import CongressCollector, FederalRegisterCollector
@@ -41,6 +41,7 @@ def _collector_loop(c: Collector, stop: threading.Event) -> None:
 
 STEPS: list[tuple[str, float, Callable]] = [
     ("process", 5, process_new),
+    ("merge", 300, merge_stories),
     ("translate", 10, run_translate),
     ("triage", 15, run_triage),
     ("breaking", 120, update_breaking),
@@ -88,6 +89,7 @@ def run_once() -> None:
     with db.connect() as conn:
         while process_new(conn):
             pass
+        merge_stories(conn)
         while run_translate(conn):
             pass
         while run_triage(conn):

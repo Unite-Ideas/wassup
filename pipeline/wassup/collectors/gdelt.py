@@ -21,7 +21,7 @@ from ..config import load_yaml, settings
 from ..db import kv_get, kv_set
 from ..geo import Place, gazetteer
 from ..outlets import tier_for
-from ..text import clean_title
+from ..text import clean_title, is_junk_title
 from .base import Collector, RawItem, ensure_source, mark_polled, store_items
 
 log = logging.getLogger(__name__)
@@ -111,8 +111,11 @@ def parse_gkg(data: bytes, theme_prefixes: list[str], min_themes: int = 1, feed:
             tone = float(row[15].split(",")[0]) if row[15] else None
         except ValueError:
             tone = None
+        title = clean_title(m.group(1))[:500]
+        if is_junk_title(title):
+            continue
         items.append(RawItem(
-            url=row[4], title=clean_title(m.group(1))[:500], published_at=published, language=lang,
+            url=row[4], title=title, published_at=published, language=lang,
             outlet=row[3], outlet_tier=tier, outlet_state=state,
             places=parse_locations(row[10]), entities=persons + orgs,
             meta={"themes": matched[:25], "tone": tone, "gdelt_id": row[0], "feed": feed},

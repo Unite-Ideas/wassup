@@ -49,6 +49,7 @@ class Settings:
     # Clustering and linking thresholds (cosine similarity). Defaults depend on the embed backend.
     cluster_threshold: float | None = field(default_factory=lambda: float(os.environ["CLUSTER_THRESHOLD"]) if "CLUSTER_THRESHOLD" in os.environ else None)
     link_threshold: float | None = field(default_factory=lambda: float(os.environ["LINK_THRESHOLD"]) if "LINK_THRESHOLD" in os.environ else None)
+    merge_threshold: float | None = field(default_factory=lambda: float(os.environ["MERGE_THRESHOLD"]) if "MERGE_THRESHOLD" in os.environ else None)
     cluster_window_hours: float = field(default_factory=lambda: _env_float("CLUSTER_WINDOW_HOURS", 72))
 
     gdelt_backfill_files: int = field(default_factory=lambda: int(_env("GDELT_BACKFILL_FILES", "8")))
@@ -59,8 +60,14 @@ class Settings:
         if self.embed_backend == "hash":
             cluster, link = 0.55, 0.30
         else:
-            cluster, link = 0.80, 0.62
+            # Measured on real GDELT and RSS headlines with bge-m3: pairs above 0.75 are nearly
+            # always the same event (often in two languages); below 0.70 mostly related events.
+            cluster, link = 0.75, 0.62
         return (self.cluster_threshold or cluster, self.link_threshold or link)
+
+    def merge_at(self) -> float:
+        """Cosine similarity at which two whole stories are merged into one."""
+        return self.merge_threshold or (0.62 if self.embed_backend == "hash" else 0.78)
 
 
 @lru_cache

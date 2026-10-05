@@ -12,7 +12,7 @@ import psycopg
 
 from ..config import load_yaml, settings
 from ..geo import gazetteer
-from ..text import clean, clean_title, detect_language
+from ..text import clean, clean_title, detect_language, is_junk_title
 from .base import Collector, RawItem, ensure_source, mark_polled, store_items
 
 log = logging.getLogger(__name__)
@@ -40,7 +40,7 @@ def parse_feed(content: bytes, src: dict) -> list[RawItem]:
     for e in feed.entries:
         url = e.get("link")
         title = clean_title(e.get("title"))[:500]
-        if not url or not title:
+        if not url or not title or is_junk_title(title):
             continue
         summary = clean(e.get("summary") or e.get("description"), 1200)
         places = gaz.find(f"{title}. {summary}")
