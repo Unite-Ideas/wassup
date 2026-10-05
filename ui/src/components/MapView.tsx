@@ -14,11 +14,14 @@ export interface MapInfo {
   detail_minzoom: number;
 }
 
+/** A map layer without its source; the overlay supplies it. */
+export type OverlayLayer = LayerSpecification extends infer T ? (T extends unknown ? Omit<T, "source"> : never) : never;
+
 /** Extra layers drawn over the base map, such as tracks. Each owns one GeoJSON source. */
 export interface Overlay {
   id: string;
   data: GeoJSON.FeatureCollection;
-  layers: Omit<LayerSpecification, "source">[];
+  layers: OverlayLayer[];
   /** Layer id under which the overlay is inserted, so stories stay on top. */
   before?: string;
 }
@@ -117,6 +120,24 @@ const STORY_LAYERS: LayerSpecification[] = [
   },
 ];
 
+/** An arrow pointing north, for directions of attack. Rotated per feature on the map. */
+function arrowIcon(): ImageData {
+  const size = 56;
+  const c = document.createElement("canvas");
+  c.width = c.height = size;
+  const g = c.getContext("2d")!;
+  g.translate(size / 2, size / 2);
+  g.beginPath();
+  g.moveTo(0, -24); g.lineTo(13, -4); g.lineTo(5, -4); g.lineTo(5, 22); g.lineTo(-5, 22); g.lineTo(-5, -4); g.lineTo(-13, -4);
+  g.closePath();
+  g.fillStyle = "#ffb020";
+  g.strokeStyle = "#05080d";
+  g.lineWidth = 3;
+  g.stroke();
+  g.fill();
+  return g.getImageData(0, 0, size, size);
+}
+
 export default function MapView({ data, desks, selection, storyDetail, visible, overlays, onSelectStory, onMapClick }: Props) {
   const box = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
@@ -140,6 +161,7 @@ export default function MapView({ data, desks, selection, storyDetail, visible, 
     m.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
     m.addControl(new maplibregl.ScaleControl({ unit: "metric" }), "bottom-right");
     m.on("load", () => {
+      m.addImage("track-arrow", arrowIcon(), { pixelRatio: 2 });
       m.addSource("stories", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
       STORY_LAYERS.forEach((l) => m.addLayer(l));
       setReady(true);

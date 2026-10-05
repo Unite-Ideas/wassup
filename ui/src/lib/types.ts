@@ -246,3 +246,38 @@ export interface Filters {
 }
 
 export type Selection = { type: "story"; id: number } | { type: "place"; id: number } | null;
+
+export interface Track {
+  id: number;
+  key: string;
+  name: string;
+  kind: "front" | "movement";
+  desk: string | null;
+  source: string | null;
+  description: string | null;
+  story_id: number | null;
+  first: string | null;
+  last: string | null;
+  snapshots: number;
+  latest: TrackStats | null;
+}
+
+export interface TrackStats {
+  occupied_km2?: number;
+  contested_km2?: number;
+  liberated_km2?: number;
+  attacks?: number;
+}
+
+export interface TrackSnapshot {
+  id: number;
+  observed_at: string;
+  stats: TrackStats;
+}
+
+export interface TrackState {
+  kind: "front" | "movement";
+  snapshot: TrackSnapshot | null;
+  previous: TrackSnapshot | null;
+  features: GeoJSON.FeatureCollection;
+}

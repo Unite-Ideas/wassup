@@ -92,6 +92,29 @@ WASSUP_TEST_ADMIN_URL=postgresql://wassup:wassup@localhost:5432/postgres .venv/b
 
 In Docker, prefix with `docker compose exec app`, for example `docker compose exec app wassup retriage`.
 
+## The MAP view and tracks
+
+The MAP tab is a zoomable map that looks like a globe when zoomed out and goes down to street
+level. The map itself (OpenStreetMap data from Protomaps) lives on your PC in `data/maps`, so it
+is free, works offline, and nobody sees what you look at. Download it once, from the wassup folder:
+
+```
+bash scripts/download_maps.sh
+docker compose up -d app
+```
+
+That fetches the world down to city level plus street level detail for Ukraine, the Middle East,
+and Mexico and Central America: roughly 10 to 20 GB, depending on the day's build. To fetch just
+one part: `bash scripts/download_maps.sh ukraine`. To add a region, add a line to `REGIONS` at the
+top of the script. Run it again any time to refresh the maps. Until the maps are downloaded, the
+MAP tab shows country outlines only.
+
+**Tracks** are things that move over time, drawn on the map. The first is the **Ukraine front
+line** from DeepStateMap: the area Russia holds (red), contested areas (grey), directions of
+attack (amber arrows), and what changed hands since the previous day, week or month (bright red
+taken, blue retaken). The full history back to April 2022 downloads by itself over the first day.
+In the tracks panel, drag the slider to any date or press PLAY to watch the front move.
+
 ## Tuning what you see
 
 Everything you are likely to change lives in `config/` and is mounted into the container, so edits apply on restart (`docker compose restart app`), followed by `wassup retriage` for desk or interest changes.

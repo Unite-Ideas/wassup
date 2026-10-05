@@ -9,7 +9,8 @@ import StoryPanel from "./components/StoryPanel";
 import PlacePanel from "./components/PlacePanel";
 import TopBar from "./components/TopBar";
 import NewsroomView from "./components/NewsroomView";
-import MapView from "./components/MapView";
+import MapView, { type Overlay } from "./components/MapView";
+import TracksPanel from "./components/TracksPanel";
 
 const HOUR = 3600e3;
 const REFRESH_MS = 60_000;
@@ -28,6 +29,7 @@ export default function App() {
   const [filters, setFilters] = useState<Filters>(() => ({ ...liveWindow(24 * HOUR), live: true, desks: new Set(), cold: false, minSig: 0 }));
   const [view, setView] = useState<View>("globe");
   const [mapOpened, setMapOpened] = useState(false);
+  const [overlays, setOverlays] = useState<Overlay[]>([]);
   useEffect(() => { if (view === "map") setMapOpened(true); }, [view]);
   const [selection, setSelection] = useState<Selection>(null);
   const [boardRoot, setBoardRoot] = useState<number | null>(null);
@@ -205,7 +207,8 @@ export default function App() {
         {mapOpened && (
           <div style={{ position: "absolute", inset: 0, visibility: view === "map" ? "visible" : "hidden" }}>
             <MapView data={globe} desks={deskMap} selection={selection} storyDetail={story} visible={view === "map"}
-              overlays={[]} onSelectStory={selectStory} />
+              overlays={overlays} onSelectStory={selectStory} />
+            <TracksPanel timelineEnd={filters.end} onOverlays={setOverlays} />
           </div>
         )}
         {view === "newsroom" && <NewsroomView desks={deskMap} onSelectStory={selectStory} />}

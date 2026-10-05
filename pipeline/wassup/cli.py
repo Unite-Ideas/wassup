@@ -3,7 +3,7 @@
   wassup init-db              create or upgrade the database schema
   wassup run                  run the pipeline forever (collect, cluster, triage, link)
   wassup once                 one full pass, then exit
-  wassup collect NAME         run one collector once (gdelt, rss, congress, federal_register)
+  wassup collect NAME         run one collector once (gdelt, rss, congress, federal_register, deepstate)
   wassup process|triage|links|breaking
   wassup retriage             mark every story for triage again (after editing desks or interests)
   wassup rebuild-stories      re-cluster every item (after changing EMBED_BACKEND or EMBED_MODEL)

@@ -14,10 +14,12 @@ from . import db
 from .config import load_yaml, settings
 from .maps_api import router as maps_router
 from .newsroom.api import router as newsroom_router
+from .tracks_api import router as tracks_router
 
 app = FastAPI(title="Wassup", version="0.1.0")
 app.include_router(newsroom_router)
 app.include_router(maps_router)
+app.include_router(tracks_router)
 app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
                    allow_methods=["*"], allow_headers=["*"])
 

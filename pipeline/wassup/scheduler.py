@@ -17,6 +17,7 @@ from .locate import run_locate
 from .newsroom.manager import run_manager
 from .retention import run_retention
 from .signals import update_breaking, update_links
+from .tracks.deepstate import DeepStateCollector
 from .translate import run_translate
 from .triage import run_triage
 
@@ -24,7 +25,7 @@ log = logging.getLogger(__name__)
 
 
 def all_collectors() -> list[Collector]:
-    return [GdeltCollector(), RssCollector(), CongressCollector(), FederalRegisterCollector()]
+    return [GdeltCollector(), RssCollector(), CongressCollector(), FederalRegisterCollector(), DeepStateCollector()]
 
 
 def _collector_loop(c: Collector, stop: threading.Event) -> None:

@@ -1,4 +1,4 @@
-import type { Brief, PlaceHit, Desk, Filters, GlobeData, GraphData, NewsroomAgent, NewsroomEvent, NewsroomStatus, PlaceDetail, Stats, Story, StoryDetail, TimelineData } from "./types";
+import type { Brief, PlaceHit, Desk, Filters, GlobeData, GraphData, NewsroomAgent, NewsroomEvent, NewsroomStatus, PlaceDetail, Stats, Story, StoryDetail, TimelineData, Track, TrackState } from "./types";
 
 async function get<T>(path: string, params?: Record<string, string | number | boolean | undefined>): Promise<T> {
   const qs = new URLSearchParams();
@@ -22,6 +22,9 @@ export const api = {
   place: (id: number, p: ReturnType<typeof filterParams>) => get<PlaceDetail>(`/places/${id}`, p),
   graph: (id: number, depth = 2) => get<GraphData>(`/graph/${id}`, { depth, max_nodes: 70 }),
   timeline: (p: { since: string; until: string; desks?: string; cold: boolean; buckets: number }) => get<TimelineData>("/timeline", p),
+  tracks: () => get<Track[]>("/tracks"),
+  trackState: (id: number, at: Date, compareDays: number) => get<TrackState>(`/tracks/${id}/state`, { at: at.toISOString(), compare_days: compareDays }),
+  trackSeries: (id: number) => get<{ t: string; stats: Record<string, number> }[]>(`/tracks/${id}/series`),
   placeSearch: (q: string) => get<PlaceHit[]>("/search/places", { q }),
   fixLocation: async (id: number, body: { place_id?: number | null; place_key?: string; off_map?: boolean }) => {
     const res = await fetch(`/api/stories/${id}/location`, {

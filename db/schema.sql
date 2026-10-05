@@ -296,3 +296,55 @@ END $$;
 
 -- Retention (retention.py) clears the vectors of stories older than a month.
 ALTER TABLE stories ALTER COLUMN centroid DROP NOT NULL;
+
+-- Tracks: things that move over time on the MAP view. A front line (areas held, contested and
+-- changing hands, from daily snapshots) or a movement such as a migrant caravan (dated points).
+CREATE TABLE IF NOT EXISTS tracks (
+    id              serial PRIMARY KEY,
+    key             text UNIQUE NOT NULL,
+    name            text NOT NULL,
+    kind            text NOT NULL,                  -- front | movement
+    desk            text,
+    source          text,                           -- where the observations come from
+    description     text,
+    story_id        bigint REFERENCES stories(id) ON DELETE SET NULL,
+    active          boolean NOT NULL DEFAULT true,
+    meta            jsonb NOT NULL DEFAULT '{}'::jsonb,
+    created_at      timestamptz NOT NULL DEFAULT now()
+);
+-- One full picture of a front at a moment (a DeepStateMap update, say), with summary numbers.
+CREATE TABLE IF NOT EXISTS track_snapshots (
+    id              bigserial PRIMARY KEY,
+    track_id        integer NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+    observed_at     timestamptz NOT NULL,
+    source_ref      text NOT NULL,
+    stats           jsonb NOT NULL DEFAULT '{}'::jsonb,
+    UNIQUE (track_id, source_ref)
+);
+CREATE INDEX IF NOT EXISTS track_snapshots_time_idx ON track_snapshots (track_id, observed_at);
+CREATE TABLE IF NOT EXISTS track_observations (
+    id              bigserial PRIMARY KEY,
+    track_id        integer NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+    snapshot_id     bigint REFERENCES track_snapshots(id) ON DELETE CASCADE,
+    observed_at     timestamptz NOT NULL,
+    category        text NOT NULL,                  -- occupied | contested | liberated | attack | position
+    geom            geometry(Geometry, 4326) NOT NULL,
+    label           text,
+    props           jsonb NOT NULL DEFAULT '{}'::jsonb,
+    source_url      text,
+    item_id         bigint REFERENCES items(id) ON DELETE SET NULL,
+    confidence      real,
+    status          text NOT NULL DEFAULT 'auto',   -- auto | confirmed | rejected
+    created_at      timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS track_observations_time_idx ON track_observations (track_id, observed_at);
+CREATE INDEX IF NOT EXISTS track_observations_snapshot_idx ON track_observations (snapshot_id);
+-- Fills holes smaller than min_m2 in (multi)polygons: the slivers left where neighbouring
+-- areas drawn by hand do not quite meet.
+CREATE OR REPLACE FUNCTION wassup_fill_small_holes(g geometry, min_m2 double precision)
+RETURNS geometry LANGUAGE sql IMMUTABLE AS $$
+    SELECT ST_Multi(ST_Collect(ST_MakePolygon(ST_ExteriorRing(p.geom), ARRAY(
+        SELECT ST_ExteriorRing(h.geom) FROM ST_DumpRings(p.geom) h
+        WHERE h.path[1] > 0 AND ST_Area(h.geom::geography) >= min_m2))))
+    FROM ST_Dump(g) p
+$$;

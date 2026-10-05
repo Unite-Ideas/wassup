@@ -249,3 +249,16 @@ Phase 0 implementation notes:
 - Thousands of local and regional sources across many languages
 - Source credibility scoring refinements
 - Prepare for release: auth, multi user, moving off the single PC
+
+## Map and tracks
+
+- **Base map:** Protomaps PMTiles files (OpenStreetMap) in `data/maps`, served by the API from
+  memory mapped files (`pipeline/wassup/maps.py`): `world.pmtiles` to zoom 9 everywhere, plus
+  street level region files. The UI draws them with MapLibre GL in globe projection.
+- **Tracks** (`tracks`, `track_snapshots`, `track_observations`): a front is a series of
+  snapshots, each with unioned and lightly simplified areas (occupied, contested, liberated) and
+  attack directions; a movement is a series of dated points. `/api/tracks/{id}/state?at=` returns
+  the picture at any moment, with changes since an earlier snapshot computed in PostGIS.
+- **Sources:** DeepStateMap for Ukraine (`pipeline/wassup/tracks/deepstate.py`). Next: tracks
+  built from news reports (caravans), GDELT and ACLED events, and photos placed on the map.
+
