@@ -60,7 +60,7 @@ class JevDecider(Decider):
             "larger_story": {"type": "noul", "instructions":
                              "Is this story tied to a war, a government or legislative action, an international dispute, a scandal involving "
                              "officials, a migration crisis, or another event of geopolitical consequence?"},
-            "significance": {"type": "score", "instructions": "How significant is this story for someone tracking world affairs?",
+            "significance": {"type": "score", "instructions": "How significant is what happened, for someone tracking world affairs? Judge the event itself, not how many outlets covered it.",
                              "criteria": SIGNIFICANCE_LEVELS},
             "primary_release": {"type": "noul", "instructions":
                                 "Is this story about a government, court, or agency releasing documents or records (declassified files, "

@@ -226,6 +226,8 @@ def refresh_stories(conn: psycopg.Connection, ids: list[int]) -> None:
            WHERE st.id = best.story_id AND NOT st.location_locked""",
         {"ids": ids},
     )
+    conn.execute("""UPDATE stories SET significance = wassup_significance(importance, source_count, country_count)
+                    WHERE id = ANY(%s) AND importance IS NOT NULL""", (ids,))
     refresh_headlines(conn, ids)
 
 

@@ -272,3 +272,27 @@ CREATE TABLE IF NOT EXISTS location_corrections (
     by              text NOT NULL DEFAULT 'you',
     created_at      timestamptz NOT NULL DEFAULT now()
 );
+
+-- Significance = how much a story matters on its own (importance, judged at triage, 0..5)
+-- plus how widely it is covered (outlets on a log scale, and countries). Coverage is computed
+-- here so the score keeps up as a story grows, without asking triage again. A story with a
+-- handful of outlets can no longer reach the top just by being on an important subject.
+CREATE OR REPLACE FUNCTION wassup_significance(importance double precision, sources double precision, countries double precision)
+RETURNS real LANGUAGE sql IMMUTABLE AS $$
+    SELECT round(least(5.0,
+        0.4 * least(greatest(coalesce(importance, 0), 0), 5)
+        + least(3.0, 0.45 * ln(1 + greatest(coalesce(sources, 0), 0)) / ln(2)
+                     + 0.1 * least(greatest(coalesce(countries, 0) - 1, 0), 5)))::numeric, 2)::real
+$$;
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'stories' AND column_name = 'importance') THEN
+        ALTER TABLE stories ADD COLUMN importance real;
+        -- Older stories only have the old blended score; use it as their importance.
+        UPDATE stories SET importance = significance WHERE triaged_item_count > 0;
+        UPDATE stories SET significance = wassup_significance(importance, source_count, country_count)
+            WHERE importance IS NOT NULL;
+    END IF;
+END $$;
+
+-- Retention (retention.py) clears the vectors of stories older than a month.
+ALTER TABLE stories ALTER COLUMN centroid DROP NOT NULL;

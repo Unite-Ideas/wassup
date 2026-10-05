@@ -149,7 +149,8 @@ def run_triage(conn: psycopg.Connection, limit: int = 500, max_seconds: float = 
         by_id = {s["id"]: s for s in stories}
         for ctx in _contexts(conn, stories):
             d = decider.decide(ctx)
-            adj = learned_adjustment(as_array(by_id[ctx.id]["centroid"]), liked, disliked)
+            c = by_id[ctx.id]["centroid"]  # cleared on stories older than the retention window
+            adj = learned_adjustment(as_array(c), liked, disliked) if c is not None else 0.0
             d.relevance = round(max(0.0, min(1.0, d.relevance + adj)), 3)
             d.significance = round(max(0.0, min(5.0, d.significance + adj)), 2)
             if d.routed and adj <= -0.25 and d.significance < 4:
@@ -161,9 +162,10 @@ def run_triage(conn: psycopg.Connection, limit: int = 500, max_seconds: float = 
                 d.routed, d.excluded_reason = True, None
                 d.desk = d.desk or "world_watch"
             conn.execute(
-                """UPDATE stories SET desk = %s, routed = %s, excluded_reason = %s, significance = %s, relevance = %s,
+                """UPDATE stories SET desk = %s, routed = %s, excluded_reason = %s, importance = %s,
+                          significance = wassup_significance(%s, source_count, country_count), relevance = %s,
                           triage = %s, triaged_item_count = item_count, updated_at = now() WHERE id = %s""",
-                (d.desk, d.routed, d.excluded_reason, d.significance, d.relevance,
+                (d.desk, d.routed, d.excluded_reason, d.significance, d.significance, d.relevance,
                  Jsonb({"backend": d.backend, "confidence": d.confidence, "learned": adj, **d.notes}), ctx.id),
             )
             done += 1

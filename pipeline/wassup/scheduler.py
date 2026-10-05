@@ -15,6 +15,7 @@ from .collectors.government import CongressCollector, FederalRegisterCollector
 from .collectors.rss import RssCollector
 from .locate import run_locate
 from .newsroom.manager import run_manager
+from .retention import run_retention
 from .signals import update_breaking, update_links
 from .translate import run_translate
 from .triage import run_triage
@@ -46,6 +47,7 @@ STEPS: list[tuple[str, float, Callable]] = [
     ("locate", 120, run_locate),
     ("links", 600, update_links),
     ("newsroom", 60, run_manager),
+    ("retention", 6 * 3600, run_retention),
 ]
 
 

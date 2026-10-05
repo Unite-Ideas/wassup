@@ -70,7 +70,7 @@ Answer:
 - desk: which desk owns this story, or "none".
 - excluded_category: if this is mainly {", ".join(self.excluded)} news, which one, else "none".
 - part_of_larger_story: true if an excluded topic is tied to a war, scandal, government action, or international event.
-- significance: 0 (trivial) to 5 (major world event).
+- significance: 0 (trivial) to 5 (major world event). Judge the event itself, not how widely it is covered.
 - primary_source_release: true if this is a government or court document release.
 - confidence: 0 to 1."""
 

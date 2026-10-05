@@ -1,7 +1,6 @@
 """Keyword, URL and GDELT theme rules. Free, instant, and good enough for most stories."""
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass
 
 from ..config import load_yaml
@@ -81,10 +80,9 @@ class RulesDecider(Decider):
 
         tier_a = "A" in ctx.tiers
         heavy = any(t.startswith(HEAVY_THEMES) for t in ctx.themes)
-        significance = (min(2.0, best / 3)
-                        + min(1.5, math.log2(1 + ctx.source_count) / 2)
-                        + min(0.75, max(ctx.country_count - 1, 0) * 0.25)
-                        + (0.5 if tier_a else 0) + (0.25 if heavy else 0))
+        # Importance only: how widely the story is covered is added when the score is stored.
+        significance = (1.0 + min(2.0, best / 2.5) + (0.75 if heavy else 0) + (0.5 if tier_a else 0)
+                        + (0.5 if include_hits else 0))
         relevance = min(1.0, best / 5 + 0.1 * len(include_hits)) if routed else min(0.2, best / 10)
 
         # Confident when the evidence is lopsided either way; unsure in the middle.

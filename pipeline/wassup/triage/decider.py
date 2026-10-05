@@ -29,7 +29,7 @@ class Decision:
     desk: str | None              # None means no desk owns it
     routed: bool                  # False means cold storage
     excluded_reason: str | None   # category from interests.yaml, or "no_desk_match"
-    significance: float           # 0..5
+    significance: float           # 0..5, how much the story matters on its own; coverage is added later
     relevance: float              # 0..1
     confidence: float             # 0..1, how sure the backend is
     backend: str

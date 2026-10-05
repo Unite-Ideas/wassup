@@ -92,3 +92,5 @@ WHERE day > current_date - 7 ORDER BY day, provider;
 
 \echo ===== DISK USED BY THE DATABASE =====
 SELECT pg_size_pretty(pg_database_size(current_database())) AS database_size;
+SELECT relname AS table_name, pg_size_pretty(pg_total_relation_size(relid)) AS size
+FROM pg_catalog.pg_statio_user_tables ORDER BY pg_total_relation_size(relid) DESC LIMIT 8;

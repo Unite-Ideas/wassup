@@ -115,6 +115,7 @@ Thumbs up and down in the story panel (MORE and LESS) teach the relevance model 
 | `TRANSLATE_MODEL` | (triage model) | Any Ollama chat model; qwen3 models translate well |
 | `CLUSTER_THRESHOLD` | 0.80 | Cosine similarity for "same story". Lower merges more |
 | `LINK_THRESHOLD` | 0.62 | Cosine similarity for "related story" strings |
+| `RETENTION_DAYS` | 30 | After this many days, article and story vectors are dropped to save disk (articles themselves are kept). Minimum 15 |
 | `GDELT_BACKFILL_FILES` | 16 | 15 minute files fetched on first start |
 | `CONGRESS_API_KEY` | (demo key) | Free from api.congress.gov |
 

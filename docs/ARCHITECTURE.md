@@ -71,6 +71,12 @@ Example triage questions asked in one call, all evaluated in parallel:
 
 The excluded category combined with the "connects to a larger story" check handles your celebrity example: it gets through only when both are true.
 
+Significance (0 to 5) has two parts. Triage judges importance: how much the event matters on its
+own, whatever its coverage. Up to 2 points come from that. Up to 3 points come from coverage:
+outlets on a log scale (7 outlets about 1.4, 30 about 2.2, 100 or more the full 3) plus a little
+for each extra country. The coverage part is recomputed in the database (`wassup_significance`)
+every time a story gains articles, so a story climbs as the world picks it up.
+
 We run both backends side by side at first and compare them. If Jev is clearly better per dollar we lean on it. If the local model is close enough, we stay local.
 
 **Status:** Jev is wired in as `JevDecider` (`pipeline/wassup/triage/jev.py`), asked only when the rules are unsure, with the local LLM after it when Jev is unsure too, and a daily spending cap. Earlier note: The `Decider` interface is in place (`pipeline/wassup/triage/decider.py`) with two working backends: `RulesDecider` (keywords, URL patterns, GDELT themes) and `OllamaDecider` (local LLM with a JSON schema). `HybridDecider` is the confidence gated router described above. A `JevDecider` is one new class when access arrives.
