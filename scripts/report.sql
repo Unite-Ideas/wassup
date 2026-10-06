@@ -90,6 +90,19 @@ FROM api_usage GROUP BY provider;
 SELECT day, provider, requests, '$' || round(cost_usd, 4) AS cost FROM api_usage
 WHERE day > current_date - 7 ORDER BY day, provider;
 
+\echo ===== TRACKS (MAP view) =====
+SELECT t.name, count(s.id) AS daily_maps, to_char(min(s.observed_at), 'YYYY-MM-DD') AS oldest,
+       to_char(max(s.observed_at), 'YYYY-MM-DD HH24:MI') AS newest,
+       (array_agg(s.stats->>'occupied_km2' ORDER BY s.observed_at DESC))[1] AS occupied_km2_now
+FROM tracks t LEFT JOIN track_snapshots s ON s.track_id = t.id GROUP BY t.name;
+
+\echo ===== STORY SIZE (last 24h, after the grouping changes) =====
+SELECT count(*) AS stories, round(avg(item_count)::numeric, 2) AS avg_articles,
+       count(*) FILTER (WHERE item_count >= 10) AS ten_plus, count(*) FILTER (WHERE source_count >= 3) AS three_plus_outlets,
+       round(avg(significance) FILTER (WHERE routed)::numeric, 2) AS avg_sig_tracked,
+       count(*) FILTER (WHERE routed AND significance >= 4) AS sig_4_plus
+FROM stories WHERE first_seen > now() - interval '24 hours';
+
 \echo ===== DISK USED BY THE DATABASE =====
 SELECT pg_size_pretty(pg_database_size(current_database())) AS database_size;
 SELECT relname AS table_name, pg_size_pretty(pg_total_relation_size(relid)) AS size
