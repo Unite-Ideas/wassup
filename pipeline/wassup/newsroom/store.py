@@ -49,12 +49,15 @@ def add_link(conn, a: int, b: int, relation: str, reason: str, agent_key: str, w
     if a == b or relation not in AGENT_RELATIONS:
         return False
     lo, hi = sorted((a, b))
-    # Direction matters for "causes" and "responds_to", so keep which story came first.
-    conn.execute(
-        """INSERT INTO story_links (a, b, kind, weight, evidence, created_by) VALUES (%s, %s, %s, %s, %s, %s)
-           ON CONFLICT (a, b, kind) DO UPDATE SET evidence = EXCLUDED.evidence, weight = EXCLUDED.weight, updated_at = now()""",
-        (lo, hi, relation, weight, Jsonb({"reason": reason, "from": a, "to": b, "by": agent_key}), f"agent:{agent_key}"))
-    return True
+    # Direction matters for "causes" and "responds_to", so keep which story came first. Either
+    # story may have been merged into another while the desk was thinking; then skip the link.
+    row = conn.execute(
+        """INSERT INTO story_links (a, b, kind, weight, evidence, created_by)
+           SELECT %s, %s, %s, %s, %s, %s WHERE (SELECT count(*) FROM stories WHERE id IN (%s, %s)) = 2
+           ON CONFLICT (a, b, kind) DO UPDATE SET evidence = EXCLUDED.evidence, weight = EXCLUDED.weight, updated_at = now()
+           RETURNING 1""",
+        (lo, hi, relation, weight, Jsonb({"reason": reason, "from": a, "to": b, "by": agent_key}), f"agent:{agent_key}", lo, hi)).fetchone()
+    return row is not None
 
 
 def get_agent(conn, key: str | None = None, paperclip_id: str | None = None) -> dict | None:

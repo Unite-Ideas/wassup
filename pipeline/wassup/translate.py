@@ -7,7 +7,9 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import time
+from concurrent.futures import ThreadPoolExecutor
 
 import httpx
 import psycopg
@@ -18,6 +20,7 @@ from .config import settings
 log = logging.getLogger(__name__)
 
 BATCH = 20
+PARALLEL = int(os.environ.get("TRANSLATE_PARALLEL", "3"))
 
 PENDING = """
     SELECT i.id, i.story_id, i.title, i.language FROM items i JOIN stories s ON s.id = i.story_id
@@ -78,32 +81,48 @@ def run_translate(conn: psycopg.Connection, max_seconds: float = 60, translator:
         return 0
     started, done = time.time(), 0
     while time.time() - started < max_seconds:
-        rows = conn.execute(PENDING, (BATCH,)).fetchall()
+        rows = conn.execute(PENDING, (BATCH * PARALLEL,)).fetchall()
         if not rows:
             break
-        try:
-            english = tr.translate([r["title"] for r in rows])
-        except (ValueError, KeyError, json.JSONDecodeError) as e:
-            log.warning("translation batch failed (%s); retrying one at a time", e)
-            english = []
-            for r in rows:
-                try:
-                    english.append(tr.translate([r["title"]])[0])
-                except Exception:
-                    english.append(None)
+        chunks = [rows[i:i + BATCH] for i in range(0, len(rows), BATCH)]
+        # Several batches at once (Ollama answers in parallel when OLLAMA_NUM_PARALLEL allows).
+        # A batch that times out or errors is left for the next round instead of failing the step.
+        with ThreadPoolExecutor(len(chunks)) as ex:
+            results = list(ex.map(lambda c: _translate_chunk(tr, c), chunks))
+        updates = [(e if e and e != r["title"] else None, r["id"])
+                   for chunk, english in zip(chunks, results) if english is not None for r, e in zip(chunk, english)]
+        if not updates:
+            break  # the model is busy or down; try again on the next run
         with conn.cursor() as cur:
             # A blank or unchanged answer still counts as done so the item is not retried forever.
-            cur.executemany("UPDATE items SET title_en = %s, translated_at = now() WHERE id = %s",
-                            [(e if e and e != r["title"] else None, r["id"]) for r, e in zip(rows, english)])
-        story_ids = list({r["story_id"] for r in rows})
+            cur.executemany("UPDATE items SET title_en = %s, translated_at = now() WHERE id = %s", updates)
+        story_ids = list({r["story_id"] for chunk, english in zip(chunks, results) if english is not None for r in chunk})
         refresh_headlines(conn, story_ids)
         # Let triage look again now that the keyword rules can read the headline.
         conn.execute("UPDATE stories SET triaged_item_count = 0 WHERE id = ANY(%s) AND title_en IS NOT NULL", (story_ids,))
         conn.commit()
-        done += len(rows)
+        done += len(updates)
     if done:
         log.info("translated %d headlines", done)
     return done
+
+
+def _translate_chunk(tr: Translator, rows: list[dict]) -> list[str | None] | None:
+    """English for each row, or None for the whole chunk when the model could not be reached."""
+    try:
+        return tr.translate([r["title"] for r in rows])
+    except (ValueError, KeyError, json.JSONDecodeError) as e:
+        log.warning("translation batch failed (%s); retrying one at a time", e)
+    except httpx.HTTPError as e:
+        log.warning("translation batch skipped for now: %s", e)
+        return None
+    english: list[str | None] = []
+    for r in rows:
+        try:
+            english.append(tr.translate([r["title"]])[0])
+        except Exception:
+            english.append(None)
+    return english
 
 
 _tr: Translator | None = None
