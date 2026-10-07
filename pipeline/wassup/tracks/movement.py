@@ -157,8 +157,10 @@ SCHEMA = {
 
 def extract_positions(llm, title: str, published: datetime, text: str | None) -> dict:
     body = " ".join((text or "").split())[:5000]
+    # Models are poor at working out "last Sunday" or "on Tuesday"; a calendar removes the arithmetic.
+    calendar = "; ".join(f"{d:%A} = {d:%Y-%m-%d}" for d in (published.date() - timedelta(days=i) for i in range(13, -1, -1)))
     prompt = f"""You track a migrant caravan (a large group of migrants travelling together) for a news analyst.
-Article published {published:%A %B %-d, %Y}.
+Article published {published:%A %B %-d, %Y}. The two weeks up to then: {calendar}.
 Headline: {title}
 {('Article text: ' + body) if body else '(Only the headline is available.)'}
 
@@ -166,10 +168,11 @@ about_group: true only if the article reports on a migrant caravan or a large mi
 reports: every place the article says the group (or part of it) physically was, with:
 - place: the town or city, as named in the article (not a region or country unless nothing finer is given)
 - country: the country it is in
-- date: the date the group was there, as YYYY-MM-DD, worked out from the publication date ("on Tuesday",
-  "yesterday", "this morning"); null if the article does not say
-- status: at (was there), arrived, departed, passed_through, stopped (stopped or held by authorities),
-  or heading_to (a destination, not a position)
+- date: the date the group was there, as YYYY-MM-DD. Use the calendar above for words like "last Sunday",
+  "on Tuesday", "yesterday" or "this morning" (a weekday with no other date means the most recent one up to
+  the publication date). null if the article does not say when; do not guess.
+- status: at (was there), arrived, departed (left this place), passed_through, stopped (stopped or held by
+  authorities), or heading_to (a destination: "set off for X", "rumbo a X", "hacia X" are heading_to X)
 - people: the number of people the article gives for the group at that point, or null
 - quote: the sentence from the article that says so, copied exactly
 - lat, lon: your best estimate of the place's coordinates, or null if you do not know it
