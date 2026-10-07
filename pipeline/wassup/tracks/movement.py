@@ -126,9 +126,11 @@ def geocode(conn: psycopg.Connection, place: str, country: str | None, item_id: 
     c = _pick([c for code in codes for c in idx.get((want, code), []) if _in(region, c.lat, c.lon)], near)
     if c is not None:
         return c.lat, c.lon, c.name, "gazetteer"
-    if guess and guess[0] is not None and guess[1] is not None:
+    if guess and guess[0] is not None and guess[1] is not None and near is not None:
+        # The model's own estimate, only when it is plausible: within a day's travel or so of
+        # the last known position (a park or a shelter is often named instead of a town).
         lat, lon = float(guess[0]), float(guess[1])
-        if _in(region, lat, lon):
+        if _in(region, lat, lon) and km(near, (lat, lon)) <= 100:
             return lat, lon, place.strip(), "approximate"
     return None
 
@@ -176,12 +178,15 @@ where a report was published). Return no reports if the article gives no positio
     return llm(prompt, SCHEMA)
 
 
-def _parse_date(s: str | None, published: datetime) -> tuple[datetime, bool]:
-    """When the group was there; (published date, False) when the model gave none or nonsense."""
+def _parse_date(s: str | None, published: datetime, read_at: datetime | None = None) -> tuple[datetime, bool]:
+    """When the group was there; (published date, False) when the model gave none or nonsense.
+    Pages are often updated after they are first published, so a date up to the day the page
+    was read is accepted."""
     if s:
         try:
             d = date.fromisoformat(s[:10])
-            if published.date() - timedelta(days=45) <= d <= published.date() + timedelta(days=1):
+            latest = max(published, read_at or published).date() + timedelta(days=1)
+            if published.date() - timedelta(days=45) <= d <= latest:
                 return datetime.combine(d, dtime(12), tzinfo=timezone.utc), True
         except ValueError:
             pass
@@ -230,7 +235,7 @@ def run_movements(conn: psycopg.Connection, llm=None, max_seconds: float = 240) 
     region = tuple(meta.get("region") or CARAVAN_REGION)
     since = datetime.fromisoformat(meta["since"])
     rows = conn.execute(
-        """SELECT i.id, coalesce(i.title_en, i.title) AS title, i.url, i.published_at, t.body
+        """SELECT i.id, coalesce(i.title_en, i.title) AS title, i.url, i.published_at, t.body, t.fetched_at AS read_at
            FROM items i LEFT JOIN item_texts t ON t.item_id = i.id AND t.status = 'ok'
            WHERE i.published_at >= %s AND coalesce(i.title_en, i.title) ~* %s
              AND NOT EXISTS (SELECT 1 FROM track_reads r WHERE r.track_id = %s AND r.item_id = i.id)
@@ -259,6 +264,19 @@ def run_movements(conn: psycopg.Connection, llm=None, max_seconds: float = 240) 
     return done
 
 
+def _quote_checks(place: str, quote: str, title: str, body: str | None) -> bool:
+    """The model must quote the article, and the quote must name the place. Small models
+    sometimes pair a place with a sentence about another one, or paraphrase."""
+    q, src, pl = _norm(quote), _norm(f"{title} {body or ''}"), _norm(place)
+    if len(q) < 12:
+        return False
+    head = q[:60]
+    if head not in src and q[-40:] not in src:
+        return False
+    words = [w for w in pl.split() if len(w) >= 4] or pl.split()
+    return any(w in q for w in words)
+
+
 def _store_reports(conn, track: int, it: dict, reports: list[dict], region) -> int:
     n = 0
     last = conn.execute(
@@ -269,14 +287,16 @@ def _store_reports(conn, track: int, it: dict, reports: list[dict], region) -> i
     for r in reports[:6]:
         if r.get("status") not in PLOTTED or not (r.get("place") or "").strip():
             continue
+        if not _quote_checks(r["place"], r.get("quote") or "", it["title"], it.get("body")):
+            continue
         where = geocode(conn, r["place"], r.get("country"), it["id"], region, (r.get("lat"), r.get("lon")), near)
         if where is None:
             continue
         lat, lon, name, how = where
         near = near or (lat, lon)  # a new track: the article's first place guides the rest
-        when, dated = _parse_date(r.get("date"), it["published_at"])
+        when, dated = _parse_date(r.get("date"), it["published_at"], it.get("read_at"))
         people = r.get("people") if isinstance(r.get("people"), int) and 0 < r["people"] < 1_000_000 else None
-        confidence = (0.8 if dated else 0.55) * (0.6 if how == "approximate" else 1.0)
+        confidence = (0.8 if dated else 0.35) * (0.6 if how == "approximate" else 1.0)
         conn.execute(
             """INSERT INTO track_observations (track_id, observed_at, category, geom, label, props, source_url, item_id, confidence)
                VALUES (%s, %s, 'position', ST_SetSRID(ST_MakePoint(%s, %s), 4326), %s, %s, %s, %s, %s)""",

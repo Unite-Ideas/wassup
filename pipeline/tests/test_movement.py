@@ -48,14 +48,18 @@ class FakeLLM:
         if "Huixtla" in prompt:
             return {"about_group": True, "reports": [
                 {"place": "Huixtla", "country": "Mexico", "date": "2026-10-03", "status": "arrived", "people": 1200,
-                 "quote": "La caravana llegó a Huixtla el viernes.", "lat": None, "lon": None},
+                 "quote": "Caravana migrante llega a Huixtla", "lat": None, "lon": None},
+                {"place": "Huehuetán", "country": "Mexico", "date": "2026-10-03", "status": "stopped", "people": None,
+                 "quote": "Caravana migrante llega a Huixtla", "lat": None, "lon": None},  # the quote is about Huixtla
+                {"place": "Escuintla", "country": "Mexico", "date": "2026-10-03", "status": "at", "people": None,
+                 "quote": "The caravan rested in Escuintla before dawn", "lat": None, "lon": None},  # not in the article
                 {"place": "Ciudad de México", "country": "Mexico", "date": None, "status": "heading_to", "people": None,
                  "quote": "con destino a la Ciudad de México", "lat": None, "lon": None}]}
         return {"about_group": True, "reports": [
             {"place": "Tapachula", "country": "Mexico", "date": "2026-10-02", "status": "departed", "people": 1500,
-             "quote": "Unos 1.500 migrantes salieron de Tapachula.", "lat": None, "lon": None},
+             "quote": "Unos 1.500 migrantes salieron de Tapachula el jueves.", "lat": None, "lon": None},
             {"place": "Álvaro Obregón", "country": "Mexico", "date": "2026-10-02", "status": "stopped", "people": None,
-             "quote": "El grupo pernoctó en Álvaro Obregón.", "lat": None, "lon": None}]}
+             "quote": "Tras caminar 20 kilómetros, el grupo pernoctó en Álvaro Obregón.", "lat": None, "lon": None}]}
 
 
 @pytest.mark.usefixtures("database")
@@ -79,6 +83,11 @@ def test_caravan_track_from_articles_to_map():
         ])
         conn.commit()
         process_new(conn)
+        body = "TAPACHULA. Unos 1.500 migrantes salieron de Tapachula el jueves. Tras caminar 20 kilómetros, el grupo pernoctó en Álvaro Obregón."
+        for n in (1, 2):
+            conn.execute("""INSERT INTO item_texts (item_id, status, body, chars) SELECT id, 'ok', %s, %s FROM items WHERE url = %s""",
+                         (body, len(body), f"https://mx.example/{n}"))
+        conn.commit()
         llm = FakeLLM()
         assert run_movements(conn, llm=llm, max_seconds=60) == 4  # the holiday caravan is read but not asked about
         assert llm.calls == 3
@@ -87,6 +96,7 @@ def test_caravan_track_from_articles_to_map():
         rows = conn.execute("SELECT label, ST_Y(geom) lat, props FROM track_observations WHERE track_id = %s ORDER BY id", (track["id"],)).fetchall()
         labels = [r["label"] for r in rows]
         assert "Huixtla" in labels and "Tapachula" in labels and "Ciudad de México" not in labels
+        assert "Huehuetán" not in labels and "Escuintla" not in labels  # wrong or made up quotes
         obregon = next(r for r in rows if r["label"].startswith("Álvaro"))
         assert 14.5 < obregon["lat"] < 15.5  # the Chiapas one, next to Tapachula, not Michoacan
 
