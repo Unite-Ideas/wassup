@@ -46,6 +46,7 @@ services:
       TRANSLATE_MODEL: ${TRANSLATE_MODEL:-}
       CONGRESS_API_KEY: ${CONGRESS_API_KEY:-}
       GDELT_BACKFILL_FILES: ${GDELT_BACKFILL_FILES:-16}
+      NEWSROOM_WORKERS: ${NEWSROOM_WORKERS:-4}   # desk runs at once; Ollama needs OLLAMA_NUM_PARALLEL of 4 or more
       WASSUP_CONFIG_DIR: /app/config
       # Newsroom (Phase 1). Only used once you run `wassup newsroom connect`.
       PAPERCLIP_URL: http://paperclip:3100
