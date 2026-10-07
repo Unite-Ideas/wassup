@@ -61,3 +61,12 @@ def test_duplicate_stories_merge():
         assert conn.execute("SELECT count(*) n FROM stories WHERE id = %s", (gone,)).fetchone()["n"] == 0
         assert conn.execute("SELECT count(*) n FROM briefs WHERE story_id = %s", (k,)).fetchone()["n"] == 1
         assert conn.execute("SELECT count(*) n FROM feedback WHERE story_id = %s", (k,)).fetchone()["n"] == 1
+
+
+def test_bigger_stories_need_closer_matches():
+    from wassup.cluster import join_needs, merge_needs
+
+    assert join_needs(0.75, 1) == 0.75
+    assert 0.77 < join_needs(0.75, 8) < 0.80
+    assert join_needs(0.75, 5000) == pytest.approx(0.80)  # capped
+    assert merge_needs(0.78, 2) < merge_needs(0.78, 50) <= 0.86

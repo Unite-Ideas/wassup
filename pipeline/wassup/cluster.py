@@ -7,6 +7,7 @@ index tuning), backed by the stories table.
 from __future__ import annotations
 
 import logging
+import math
 import time
 
 import numpy as np
@@ -113,6 +114,21 @@ class ActiveIndex:
 _index = ActiveIndex()
 
 
+# A story's centroid is the average of its articles, and the average of many articles about a
+# war or an election drifts towards "news about that war": close to every new article on the
+# subject. So the bigger a story, the closer a new article (or another story) must be to join
+# it. Measured on three days of real Russia and Ukraine coverage: with fixed thresholds one
+# story swallowed 1,389 articles about a dozen different events; with these, they stay apart
+# (Merz in Kyiv, the strikes that followed, the drone attack on Moscow) while a big single
+# event such as the Siberian plague case holds together.
+def join_needs(base: float, size: int) -> float:
+    return min(base + 0.05, base + 0.015 * math.log2(max(size, 1)))
+
+
+def merge_needs(base: float, smaller: int) -> float:
+    return min(base + 0.08, base + 0.015 * math.log2(max(smaller, 1)))
+
+
 def embed_text(title: str, summary: str | None) -> str:
     return f"{comparable_title(title)}. {(summary or '')[:300]}".strip()
 
@@ -168,7 +184,7 @@ def _process(conn: psycopg.Connection, batch: int, max_seconds: float) -> int:
                 continue
             seen = r["published_at"].timestamp()
             sid, sim = _index.nearest(v, not_before=seen - window * 3600)
-            if sid is not None and sim >= threshold:
+            if sid is not None and sim >= join_needs(threshold, int(_index._counts[_index.pos[sid]])):
                 centroids[sid] = _index.update(sid, v, seen)
             else:
                 sid = spare.pop()
@@ -312,7 +328,7 @@ def _merge(conn: psycopg.Connection, max_merges: int) -> int:
         if a in gone or b in gone or a == b:
             continue
         # Each story may have drifted since this pass started; check again.
-        if float(_index._vecs[pa] @ _index._vecs[pb]) < at:
+        if float(_index._vecs[pa] @ _index._vecs[pb]) < merge_needs(at, int(min(_index._counts[pa], _index._counts[pb]))):
             continue
         keep, drop = (a, b) if (_index._counts[pa], -a) >= (_index._counts[pb], -b) else (b, a)
         _absorb(conn, keep, drop)
