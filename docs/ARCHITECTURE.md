@@ -261,6 +261,8 @@ Phase 0 implementation notes:
   snapshots, each with unioned and lightly simplified areas (occupied, contested, liberated) and
   attack directions; a movement is a series of dated points. `/api/tracks/{id}/state?at=` returns
   the picture at any moment, with changes since an earlier snapshot computed in PostGIS.
-- **Sources:** DeepStateMap for Ukraine (`pipeline/wassup/tracks/deepstate.py`). Next: tracks
-  built from news reports (caravans), GDELT and ACLED events, and photos placed on the map.
+- **Sources:** DeepStateMap for Ukraine (`pipeline/wassup/tracks/deepstate.py`), and migrant
+  caravans read from the news by the local model (`pipeline/wassup/tracks/movement.py`), placed
+  with GDELT's tags, known places and a list of towns along the routes (`data/towns.tsv`), the
+  route cleaned day by day. Next: GDELT and ACLED events, and photos placed on the map.
 

@@ -130,6 +130,14 @@ attack (amber arrows), and what changed hands since the previous day, week or mo
 taken, blue retaken). The full history back to April 2022 downloads by itself over the first day.
 In the tracks panel, drag the slider to any date or press PLAY to watch the front move.
 
+The second kind of track follows a **migrant caravan**. When caravan stories appear, Wassup
+starts a track by itself and the local model reads each caravan article for where the group was,
+when, and how many people. The map shows the route day by day; the tracks panel lists every
+report with the sentence it came from. Click **confirm** on a report you trust (it then wins its
+day) or **reject** on a wrong one (it disappears for good). Reports tagged *approx* were placed
+from the model's own estimate, *off route* ones disagree with the rest of the path, and
+*undated* ones use the article's date.
+
 ## Tuning what you see
 
 Everything you are likely to change lives in `config/` and is mounted into the container, so edits apply on restart (`docker compose restart app`), followed by `wassup retriage` for desk or interest changes.
