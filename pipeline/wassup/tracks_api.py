@@ -77,7 +77,7 @@ def state(track_id: int, at: datetime | None = None, compare_days: float = Query
                ORDER BY observed_at""", (track_id, at)).fetchall()
     # A movement shows its whole route so far; the trail only fades older reports.
     pts = [{"id": r["id"], "day": r["observed_at"].date(), "lat": r["lat"], "lon": r["lon"], "status": r["status"],
-            "confidence": r["confidence"]} for r in rows]
+            "confidence": r["confidence"], "report_status": (r["props"] or {}).get("status")} for r in rows]
     path, outliers = daily_path(pts)
     on_path = {p["id"] for p in path}
     feats = []

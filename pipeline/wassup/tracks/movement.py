@@ -314,6 +314,8 @@ def _store_reports(conn, track: int, it: dict, reports: list[dict], region) -> i
 # --- the path ------------------------------------------------------------------------------
 
 MAX_KM_PER_DAY = 250  # on foot a caravan covers 20 to 40 km a day; buses and trains far more, but not this
+AGREE_KM = 40         # reports this close on the same day agree (a day's walk)
+STATUS_WEIGHT = {"arrived": 1.0, "at": 1.0, "stopped": 1.0, "passed_through": 0.8, "departed": 0.6}
 
 
 def km(a: tuple[float, float], b: tuple[float, float]) -> float:
@@ -326,9 +328,14 @@ def daily_path(points: list[dict]) -> tuple[list[dict], set[int]]:
     """One position per day and the ids of reports that disagree with the path.
 
     points: dicts with id, day (date), lat, lon, status ('confirmed' wins), confidence.
-    For each day the place with the most support wins (reports within 25 km count together);
+    For each day the place with the most support wins (reports within AGREE_KM count together,
+    weighted by confidence and by how reliable their status is);
     then any day that would need more than MAX_KM_PER_DAY from the previous day is left out.
     """
+    def weight(p):
+        # "departed" is the label models most often get wrong ("set off for X"), so it counts less.
+        return (p["confidence"] or 0.5) * STATUS_WEIGHT.get(p.get("report_status") or "at", 1.0)
+
     by_day: dict[date, list[dict]] = {}
     for p in points:
         by_day.setdefault(p["day"], []).append(p)
@@ -338,8 +345,8 @@ def daily_path(points: list[dict]) -> tuple[list[dict], set[int]]:
         confirmed = [p for p in ps if p["status"] == "confirmed"]
         pool = confirmed or ps
         def support(p):
-            return sum(q["confidence"] or 0.5 for q in pool if km((p["lat"], p["lon"]), (q["lat"], q["lon"])) <= 25)
-        best = max(pool, key=lambda p: (support(p), p["confidence"] or 0))
+            return sum(weight(q) for q in pool if km((p["lat"], p["lon"]), (q["lat"], q["lon"])) <= AGREE_KM)
+        best = max(pool, key=lambda p: (support(p), weight(p)))
         picks.append({**best, "confirmed_day": bool(confirmed)})
     path, prev = [], None
     for p in picks:
@@ -353,7 +360,7 @@ def daily_path(points: list[dict]) -> tuple[list[dict], set[int]]:
     near = set()
     for p in points:
         day_pick = next((q for q in path if q["day"] == p["day"]), None)
-        if day_pick and km((p["lat"], p["lon"]), (day_pick["lat"], day_pick["lon"])) <= 25:
+        if day_pick and km((p["lat"], p["lon"]), (day_pick["lat"], day_pick["lon"])) <= AGREE_KM:
             near.add(p["id"])
     outliers = {p["id"] for p in points if p["id"] not in on_path and p["id"] not in near and p["status"] != "confirmed"}
     return path, outliers
