@@ -13,7 +13,7 @@ import numpy as np
 import psycopg
 
 from .config import settings
-from .db import kv_get, kv_set
+from .db import kv_get, kv_set, lock_stories
 from .embed import DIM, as_array, get_embedder
 from .text import comparable_title
 
@@ -176,6 +176,7 @@ def _process(conn: psycopg.Connection, batch: int, max_seconds: float) -> int:
                 new_stories.append([sid, r["title"], r["published_at"]])
             item_updates.append((v, sid, r["id"]))
         new_ids = {ns[0] for ns in new_stories}
+        lock_stories(conn, [sid for sid in centroids if sid not in new_ids])
         with conn.cursor() as cur:
             cur.executemany(
                 "INSERT INTO stories (id, title, centroid, item_count, first_seen, last_seen) VALUES (%s, %s, %s, 1, %s, %s)",
@@ -197,6 +198,7 @@ def refresh_stories(conn: psycopg.Connection, ids: list[int]) -> None:
     """Recompute counts, time span, locations and headline for the given stories."""
     if not ids:
         return
+    lock_stories(conn, ids)
     conn.execute(
         """WITH s AS (
              SELECT story_id, count(*) n, count(DISTINCT coalesce(outlet, source_id::text)) srcs,
@@ -326,6 +328,7 @@ def _merge(conn: psycopg.Connection, max_merges: int) -> int:
 
 
 def _absorb(conn: psycopg.Connection, keep: int, drop: int) -> None:
+    lock_stories(conn, [keep, drop])
     centroid = _index.absorb(keep, drop)
     k, d = (conn.execute("SELECT routed, desk FROM stories WHERE id = %s", (x,)).fetchone() for x in (keep, drop))
     had_feedback = conn.execute("SELECT 1 FROM feedback WHERE story_id = %s LIMIT 1", (drop,)).fetchone()

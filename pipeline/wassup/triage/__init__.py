@@ -11,6 +11,7 @@ import psycopg
 from psycopg.types.json import Jsonb
 
 from ..config import settings
+from ..db import lock_stories
 from ..embed import as_array
 from .decider import Decider, Decision, StoryContext
 from .ollama import OllamaDecider
@@ -147,6 +148,9 @@ def run_triage(conn: psycopg.Connection, limit: int = 500, max_seconds: float = 
             "SELECT DISTINCT ON (story_id) story_id, value FROM feedback WHERE story_id = ANY(%s) ORDER BY story_id, created_at DESC",
             ([s["id"] for s in stories],))}
         by_id = {s["id"]: s for s in stories}
+        writes = []
+        # Decide everything first (this can take a while when Jev or the model is asked), then
+        # write in one short transaction, locking stories in id order like the other lanes do.
         for ctx in _contexts(conn, stories):
             d = decider.decide(ctx)
             c = by_id[ctx.id]["centroid"]  # cleared on stories older than the retention window
@@ -161,15 +165,18 @@ def run_triage(conn: psycopg.Connection, limit: int = 500, max_seconds: float = 
             elif fb == 1:
                 d.routed, d.excluded_reason = True, None
                 d.desk = d.desk or "world_watch"
-            conn.execute(
+            writes.append((d.desk, d.routed, d.excluded_reason, d.significance, d.significance, d.relevance,
+                           Jsonb({"backend": d.backend, "confidence": d.confidence, "learned": adj, **d.notes}), ctx.id))
+        conn.commit()  # end the read transaction before taking locks
+        writes.sort(key=lambda w: w[-1])
+        lock_stories(conn, [w[-1] for w in writes])
+        with conn.cursor() as cur:
+            cur.executemany(
                 """UPDATE stories SET desk = %s, routed = %s, excluded_reason = %s, importance = %s,
                           significance = wassup_significance(%s, source_count, country_count), relevance = %s,
-                          triage = %s, triaged_item_count = item_count, updated_at = now() WHERE id = %s""",
-                (d.desk, d.routed, d.excluded_reason, d.significance, d.significance, d.relevance,
-                 Jsonb({"backend": d.backend, "confidence": d.confidence, "learned": adj, **d.notes}), ctx.id),
-            )
-            done += 1
+                          triage = %s, triaged_item_count = item_count, updated_at = now() WHERE id = %s""", writes)
         conn.commit()
+        done += len(writes)
     if done:
         log.info("triaged %d stories", done)
     return done

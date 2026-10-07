@@ -88,3 +88,36 @@ def test_nan_input_retried_with_variants():
     e = OllamaEmbedder("http://ollama", "bge-m3")
     e.client = httpx.Client(transport=httpx.MockTransport(handler))
     assert e._embed(["China-US summit ends. More text"]).any()
+
+
+def test_lanes_retry_a_step_that_gave_way_in_a_deadlock(monkeypatch):
+    import threading
+    import time
+
+    import psycopg
+
+    from wassup import scheduler
+
+    class FakeConn:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    monkeypatch.setattr(scheduler.db, "connect", lambda: FakeConn())
+    calls = []
+
+    def step(conn):
+        calls.append(time.time())
+        if len(calls) == 1:
+            raise psycopg.errors.DeadlockDetected("deadlock detected")
+
+    stop = threading.Event()
+    t = threading.Thread(target=scheduler._lane_loop, args=([("x", 600, step)], stop), daemon=True)
+    t.start()
+    deadline = time.time() + 10
+    while len(calls) < 2 and time.time() < deadline:
+        time.sleep(0.1)
+    stop.set()
+    assert len(calls) == 2 and calls[1] - calls[0] < 5  # retried within seconds, not after 600

@@ -16,6 +16,7 @@ import psycopg
 
 from .cluster import refresh_headlines
 from .config import settings
+from .db import lock_stories
 
 log = logging.getLogger(__name__)
 
@@ -97,6 +98,7 @@ def run_translate(conn: psycopg.Connection, max_seconds: float = 60, translator:
             # A blank or unchanged answer still counts as done so the item is not retried forever.
             cur.executemany("UPDATE items SET title_en = %s, translated_at = now() WHERE id = %s", updates)
         story_ids = list({r["story_id"] for chunk, english in zip(chunks, results) if english is not None for r in chunk})
+        lock_stories(conn, story_ids)
         refresh_headlines(conn, story_ids)
         # Let triage look again now that the keyword rules can read the headline.
         conn.execute("UPDATE stories SET triaged_item_count = 0 WHERE id = ANY(%s) AND title_en IS NOT NULL", (story_ids,))

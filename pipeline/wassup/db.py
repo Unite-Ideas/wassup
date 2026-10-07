@@ -21,7 +21,7 @@ def _configure(conn: psycopg.Connection) -> None:
 def pool() -> ConnectionPool:
     global _pool
     if _pool is None:
-        _pool = ConnectionPool(settings().database_url, min_size=1, max_size=10, configure=_configure,
+        _pool = ConnectionPool(settings().database_url, min_size=1, max_size=40, configure=_configure,
                                kwargs={"row_factory": dict_row}, open=True)
     return _pool
 
@@ -50,6 +50,14 @@ def sync_country_places(conn: psycopg.Connection) -> None:
                         [(p.lat, p.lon, p.key, p.lat, p.lon) for p in gazetteer().countries.values()])
         cur.execute("""UPDATE stories s SET lat = p.lat, lon = p.lon FROM places p
                        WHERE s.primary_place_id = p.id AND p.key LIKE 'cc:%%' AND (s.lat <> p.lat OR s.lon <> p.lon)""")
+
+
+def lock_stories(conn: psycopg.Connection, ids) -> None:
+    """Lock story rows in id order before changing them. The pipeline lanes all change stories at
+    once; taking locks in the same order makes them queue instead of deadlocking."""
+    ids = sorted({int(i) for i in ids})
+    if ids:
+        conn.execute("SELECT id FROM stories WHERE id = ANY(%s) ORDER BY id FOR NO KEY UPDATE", (ids,))
 
 
 def kv_get(conn: psycopg.Connection, key: str, default=None):
