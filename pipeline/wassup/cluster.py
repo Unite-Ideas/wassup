@@ -356,6 +356,7 @@ def _absorb(conn: psycopg.Connection, keep: int, drop: int) -> None:
         "UPDATE newsroom_events SET story_id = %(k)s WHERE story_id = %(d)s",
         "UPDATE newsroom_agents SET focus_story_id = %(k)s WHERE focus_story_id = %(d)s",
         "UPDATE location_corrections SET story_id = %(k)s WHERE story_id = %(d)s",
+        "UPDATE tracks SET story_id = %(k)s WHERE story_id = %(d)s",
         """INSERT INTO follows (story_id, agent_key, reason, active, created_at)
            SELECT %(k)s, agent_key, reason, active, created_at FROM follows WHERE story_id = %(d)s ON CONFLICT DO NOTHING""",
         """INSERT INTO escalations (story_id, paperclip_issue_id, created_at)

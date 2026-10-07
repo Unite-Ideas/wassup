@@ -21,6 +21,7 @@ from .reader import run_reader
 from .retention import run_retention
 from .signals import update_breaking, update_links
 from .tracks.deepstate import DeepStateCollector
+from .tracks.movement import run_movements
 from .translate import run_translate
 from .triage import run_triage
 
@@ -54,6 +55,7 @@ LANES: list[tuple[str, list[tuple[str, float, Callable]]]] = [
     ("signals", [("breaking", 120, update_breaking), ("links", 600, update_links)]),
     ("locate", [("locate", 120, run_locate)]),
     ("newsroom", [("newsroom", 60, run_manager)]),
+    ("movements", [("movements", 300, run_movements)]),
     ("upkeep", [("retention", 6 * 3600, run_retention)]),
 ]
 STEPS = [step for _, steps in LANES for step in steps]

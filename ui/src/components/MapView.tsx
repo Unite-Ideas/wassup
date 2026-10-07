@@ -35,6 +35,8 @@ interface Props {
   overlays: Overlay[];
   onSelectStory: (id: number) => void;
   onMapClick?: (lngLat: [number, number], features: maplibregl.MapGeoJSONFeature[]) => void;
+  /** Fly here when it changes (n makes repeated requests for the same spot count). */
+  focus?: { lng: number; lat: number; zoom: number; n: number } | null;
 }
 
 // The Wassup palette on Protomaps' dark flavor: near black land, deep blue water.
@@ -138,7 +140,7 @@ function arrowIcon(): ImageData {
   return g.getImageData(0, 0, size, size);
 }
 
-export default function MapView({ data, desks, selection, storyDetail, visible, overlays, onSelectStory, onMapClick }: Props) {
+export default function MapView({ data, desks, selection, storyDetail, visible, overlays, onSelectStory, onMapClick, focus }: Props) {
   const box = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const [info, setInfo] = useState<MapInfo | null | undefined>(undefined);
@@ -204,6 +206,10 @@ export default function MapView({ data, desks, selection, storyDetail, visible, 
       m.flyTo({ center: target, zoom: Math.max(m.getZoom(), 4.5), speed: 1.4 });
     }
   }, [ready, storyDetail, selectedId]);
+
+  useEffect(() => {
+    if (ready && focus) map.current?.flyTo({ center: [focus.lng, focus.lat], zoom: focus.zoom, speed: 1.4 });
+  }, [ready, focus]);
 
   // Overlays: add, update and remove their sources and layers as the list changes.
   const shown = useRef<Map<string, string[]>>(new Map());

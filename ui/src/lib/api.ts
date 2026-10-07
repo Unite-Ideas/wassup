@@ -25,6 +25,12 @@ export const api = {
   itemText: (id: number) => get<{ status: string; body: string | null; lead_image: string | null; images: { src: string; caption: string }[] }>(`/items/${id}/text`),
   tracks: () => get<Track[]>("/tracks"),
   trackState: (id: number, at: Date, compareDays: number) => get<TrackState>(`/tracks/${id}/state`, { at: at.toISOString(), compare_days: compareDays }),
+  setObservation: async (id: number, status: "confirmed" | "rejected" | "auto") => {
+    const res = await fetch(`/api/tracks/observations/${id}`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }),
+    });
+    if (!res.ok) throw new Error(`could not update report: ${res.status}`);
+  },
   trackSeries: (id: number) => get<{ t: string; stats: Record<string, number> }[]>(`/tracks/${id}/series`),
   placeSearch: (q: string) => get<PlaceHit[]>("/search/places", { q }),
   fixLocation: async (id: number, body: { place_id?: number | null; place_key?: string; off_map?: boolean }) => {

@@ -361,3 +361,12 @@ CREATE TABLE IF NOT EXISTS item_texts (
     fetched_at      timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS item_texts_fetched_idx ON item_texts (fetched_at);
+
+-- Articles a movement track has already read (whether or not they gave a position).
+CREATE TABLE IF NOT EXISTS track_reads (
+    track_id        integer NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+    item_id         bigint NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+    positions       integer NOT NULL DEFAULT 0,
+    read_at         timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (track_id, item_id)
+);

@@ -30,6 +30,8 @@ export default function App() {
   const [view, setView] = useState<View>("globe");
   const [mapOpened, setMapOpened] = useState(false);
   const [overlays, setOverlays] = useState<Overlay[]>([]);
+  const [mapFocus, setMapFocus] = useState<{ lng: number; lat: number; zoom: number; n: number } | null>(null);
+  const focusMap = useCallback((lng: number, lat: number) => setMapFocus((f) => ({ lng, lat, zoom: 9, n: (f?.n ?? 0) + 1 })), []);
   useEffect(() => { if (view === "map") setMapOpened(true); }, [view]);
   const [selection, setSelection] = useState<Selection>(null);
   const [boardRoot, setBoardRoot] = useState<number | null>(null);
@@ -207,8 +209,8 @@ export default function App() {
         {mapOpened && (
           <div style={{ position: "absolute", inset: 0, visibility: view === "map" ? "visible" : "hidden" }}>
             <MapView data={globe} desks={deskMap} selection={selection} storyDetail={story} visible={view === "map"}
-              overlays={overlays} onSelectStory={selectStory} />
-            <TracksPanel timelineEnd={filters.end} onOverlays={setOverlays} />
+              overlays={overlays} onSelectStory={selectStory} focus={mapFocus} />
+            <TracksPanel timelineEnd={filters.end} onOverlays={setOverlays} onFocus={focusMap} />
           </div>
         )}
         {view === "newsroom" && <NewsroomView desks={deskMap} onSelectStory={selectStory} />}

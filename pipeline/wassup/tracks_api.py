@@ -7,7 +7,10 @@ from functools import lru_cache
 
 from fastapi import APIRouter, HTTPException, Query
 
+from pydantic import BaseModel
+
 from . import db
+from .tracks.movement import daily_path, km
 
 router = APIRouter(prefix="/api/tracks")
 
@@ -40,8 +43,9 @@ def state(track_id: int, at: datetime | None = None, compare_days: float = Query
     """The track as it stood at `at` (default now).
 
     Fronts: the last snapshot at or before `at`, plus what changed hands since the snapshot
-    `compare_days` earlier ("gained" by the occupier, "lost" by it). Movements: positions
-    reported during the `trail_days` before `at`, oldest first, joined into a path.
+    `compare_days` earlier ("gained" by the occupier, "lost" by it). Movements: every position
+    reported up to `at`, with the day by day path, reports that disagree with it flagged, and a
+    summary (latest place, distance covered, last group size).
     """
     at = at or datetime.now(timezone.utc)
     if at.tzinfo is None:
@@ -68,17 +72,48 @@ def state(track_id: int, at: datetime | None = None, compare_days: float = Query
             return {"kind": "front", "snapshot": snap, "previous": prev, "features": features}
         rows = conn.execute(
             """SELECT id, observed_at, category, label, props, source_url, item_id, confidence, status,
-                      ST_AsGeoJSON(geom, 5) AS g FROM track_observations
-               WHERE track_id = %s AND observed_at <= %s AND observed_at > %s AND status <> 'rejected'
-               ORDER BY observed_at""", (track_id, at, at - timedelta(days=trail_days))).fetchall()
-        feats = [_feature(r["g"], {"id": r["id"], "category": r["category"], "label": r["label"], "observed_at": r["observed_at"].isoformat(),
-                                   "source_url": r["source_url"], "item_id": r["item_id"], "confidence": r["confidence"],
-                                   "status": r["status"], "age_days": (at - r["observed_at"]).total_seconds() / 86400, **(r["props"] or {})})
-                 for r in rows]
-        path = [json.loads(r["g"])["coordinates"] for r in rows if r["category"] == "position" and r["g"].startswith('{"type":"Point"')]
-        if len(path) >= 2:
-            feats.insert(0, _feature(json.dumps({"type": "LineString", "coordinates": path}), {"category": "path"}))
-        return {"kind": t["kind"], "snapshot": None, "previous": None, "features": _fc(feats)}
+                      ST_Y(geom) AS lat, ST_X(geom) AS lon FROM track_observations
+               WHERE track_id = %s AND observed_at <= %s AND status <> 'rejected' AND category = 'position'
+               ORDER BY observed_at""", (track_id, at)).fetchall()
+    # A movement shows its whole route so far; the trail only fades older reports.
+    pts = [{"id": r["id"], "day": r["observed_at"].date(), "lat": r["lat"], "lon": r["lon"], "status": r["status"],
+            "confidence": r["confidence"]} for r in rows]
+    path, outliers = daily_path(pts)
+    on_path = {p["id"] for p in path}
+    feats = []
+    if len(path) >= 2:
+        feats.append(_feature(json.dumps({"type": "LineString", "coordinates": [[p["lon"], p["lat"]] for p in path]}),
+                              {"category": "path"}))
+    for r in rows:
+        feats.append(_feature(json.dumps({"type": "Point", "coordinates": [r["lon"], r["lat"]]}), {
+            "id": r["id"], "category": "position", "label": r["label"], "observed_at": r["observed_at"].isoformat(),
+            "source_url": r["source_url"], "item_id": r["item_id"], "confidence": r["confidence"], "status": r["status"],
+            "on_path": r["id"] in on_path, "outlier": r["id"] in outliers,
+            "age_days": (at - r["observed_at"]).total_seconds() / 86400, **(r["props"] or {})}))
+    latest = path[-1] if path else None
+    people = next((r["props"].get("people") for r in reversed(rows) if (r["props"] or {}).get("people")), None)
+    distance = sum(km((a["lat"], a["lon"]), (b["lat"], b["lon"])) for a, b in zip(path, path[1:]))
+    summary = {"reports": len(rows), "days": len(path), "km": round(distance),
+               "latest": {"place": next(r["label"] for r in rows if r["id"] == latest["id"]), "day": latest["day"].isoformat()} if latest else None,
+               "people": people}
+    return {"kind": t["kind"], "snapshot": None, "previous": None, "summary": summary, "features": _fc(feats)}
+
+
+class ObservationIn(BaseModel):
+    status: str  # confirmed | rejected | auto
+
+
+@router.post("/observations/{obs_id}")
+def set_observation(obs_id: int, body: ObservationIn) -> dict:
+    """Confirm a report (it then wins its day on the path) or reject it (it is hidden for good)."""
+    if body.status not in ("confirmed", "rejected", "auto"):
+        raise HTTPException(400, "status must be confirmed, rejected or auto")
+    with db.connect() as conn:
+        n = conn.execute("UPDATE track_observations SET status = %s WHERE id = %s", (body.status, obs_id)).rowcount
+        conn.commit()
+    if not n:
+        raise HTTPException(404, "report not found")
+    return {"ok": True}
 
 
 @lru_cache(maxsize=64)

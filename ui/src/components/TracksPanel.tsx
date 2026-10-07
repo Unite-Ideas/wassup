@@ -7,6 +7,7 @@ interface Props {
   /** The end of the main timeline window. Tracks follow it unless you pick your own date. */
   timelineEnd: Date;
   onOverlays: (o: Overlay[]) => void;
+  onFocus: (lng: number, lat: number) => void;
 }
 
 const DAY = 86400e3;
@@ -37,16 +38,73 @@ function frontLayers(id: string): L[] {
 }
 
 function movementLayers(id: string): L[] {
+  const pos = ["all", ["==", ["get", "category"], "position"]];
   return [
-    { id: `${id}-path`, type: "line", filter: cat("path"), paint: { "line-color": C.path, "line-width": 2, "line-dasharray": [1.5, 1.5], "line-opacity": 0.8 } },
+    { id: `${id}-path`, type: "line", filter: cat("path"), layout: { "line-join": "round", "line-cap": "round" },
+      paint: { "line-color": C.path, "line-width": ["interpolate", ["linear"], ["zoom"], 4, 2, 10, 4], "line-opacity": 0.85 } },
     {
-      id: `${id}-pos`, type: "circle", filter: cat("position"),
+      id: `${id}-report`, type: "circle", filter: [...pos, ["!", ["get", "on_path"]]] as unknown as Filter,
       paint: {
-        "circle-radius": 5, "circle-color": C.path, "circle-stroke-color": "#05080d", "circle-stroke-width": 1,
-        "circle-opacity": ["interpolate", ["linear"], ["coalesce", ["get", "age_days"], 0], 0, 1, 14, 0.25],
+        "circle-radius": ["interpolate", ["linear"], ["zoom"], 4, 2.5, 10, 5],
+        "circle-color": ["case", ["get", "outlier"], "rgba(0,0,0,0)", C.path],
+        "circle-opacity": ["interpolate", ["linear"], ["coalesce", ["get", "age_days"], 0], 0, 0.7, 21, 0.25],
+        "circle-stroke-color": ["case", ["get", "outlier"], "#8fa3b8", "#05080d"], "circle-stroke-width": 1,
       },
     },
+    {
+      id: `${id}-day`, type: "circle", filter: [...pos, ["get", "on_path"]] as unknown as Filter,
+      paint: {
+        "circle-radius": ["interpolate", ["linear"], ["zoom"], 4, 4, 10, 8],
+        "circle-color": C.path,
+        "circle-stroke-color": ["case", ["==", ["get", "status"], "confirmed"], "#ffffff", "#05080d"],
+        "circle-stroke-width": ["case", ["==", ["get", "status"], "confirmed"], 2, 1],
+      },
+    },
+    {
+      id: `${id}-day-label`, type: "symbol", filter: [...pos, ["get", "on_path"]] as unknown as Filter, minzoom: 5.5,
+      layout: { "text-field": ["concat", ["get", "label"], "  ", ["slice", ["get", "observed_at"], 5, 10]],
+                "text-font": ["Noto Sans Regular"], "text-size": 11, "text-offset": [0, 1.2], "text-anchor": "top", "text-optional": true },
+      paint: { "text-color": "#d7e3ef", "text-halo-color": "#05080d", "text-halo-width": 1.4 },
+    },
   ];
+}
+
+function Reports({ state, onFocus, onChange }: { state: TrackState; onFocus: (lng: number, lat: number) => void; onChange: () => void }) {
+  const reports = state.features.features
+    .filter((f) => f.properties?.category === "position")
+    .sort((a, b) => String(b.properties?.observed_at).localeCompare(String(a.properties?.observed_at)))
+    .slice(0, 12);
+  if (!reports.length) return <div className="dimmer" style={{ marginTop: 6 }}>No positions reported yet.</div>;
+  const set = (id: number, status: "confirmed" | "rejected" | "auto") => api.setObservation(id, status).then(onChange).catch(() => undefined);
+  return (
+    <div className="tp-reports">
+      {reports.map((f) => {
+        const p = f.properties as Record<string, any>;
+        const [lng, lat] = (f.geometry as GeoJSON.Point).coordinates;
+        return (
+          <div key={p.id} className={`tp-report ${p.outlier ? "outlier" : ""} ${p.status === "confirmed" ? "confirmed" : ""}`}>
+            <div className="tp-report-head">
+              <button className="linkish" onClick={() => onFocus(lng, lat)} title="Show on the map">
+                {day(p.observed_at)} · <b>{p.label}</b>
+              </button>
+              {p.people ? <span className="dimmer"> · ~{Number(p.people).toLocaleString()} people</span> : null}
+              {p.placed_by === "approximate" && <span className="tag" title="Place not found in the town lists; the model's estimate">approx</span>}
+              {p.outlier && <span className="tag" title="Too far from the rest of the route for that date">off route</span>}
+              {!p.dated && <span className="tag" title="The article gave no date; the publication date is used">undated</span>}
+            </div>
+            {p.quote && <div className="tp-quote">“{p.quote}”</div>}
+            <div className="tp-report-actions">
+              {p.source_url && <a href={p.source_url} target="_blank" rel="noreferrer noopener">source</a>}
+              {p.status !== "confirmed"
+                ? <button className="linkish" onClick={() => set(p.id, "confirmed")}>✓ confirm</button>
+                : <button className="linkish" onClick={() => set(p.id, "auto")}>undo confirm</button>}
+              <button className="linkish" onClick={() => set(p.id, "rejected")}>✕ reject</button>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 const km2 = (n?: number) => (n == null ? "?" : n >= 1000 ? `${Math.round(n).toLocaleString()} km²` : `${n.toFixed(n < 10 ? 2 : 1)} km²`);
@@ -69,7 +127,7 @@ function Sparkline({ points, cursor }: { points: { t: number; v: number }[]; cur
   );
 }
 
-export default function TracksPanel({ timelineEnd, onOverlays }: Props) {
+export default function TracksPanel({ timelineEnd, onOverlays, onFocus }: Props) {
   const [tracks, setTracks] = useState<Track[]>([]);
   const [on, setOn] = useState<Set<number>>(new Set());
   const [states, setStates] = useState<Map<number, TrackState>>(new Map());
@@ -78,12 +136,13 @@ export default function TracksPanel({ timelineEnd, onOverlays }: Props) {
   const [compare, setCompare] = useState(1);
   const [playing, setPlaying] = useState(false);
   const [open, setOpen] = useState(true);
+  const [refresh, setRefresh] = useState(0);
   const at = pinned ?? timelineEnd;
 
   useEffect(() => {
     api.tracks().then((t) => {
       setTracks(t);
-      setOn(new Set(t.filter((x) => x.kind === "front").map((x) => x.id)));
+      setOn(new Set(t.map((x) => x.id)));
     }).catch(() => undefined);
   }, []);
 
@@ -105,7 +164,7 @@ export default function TracksPanel({ timelineEnd, onOverlays }: Props) {
         .catch(() => undefined);
     }, playing ? 0 : 150);
     return () => clearTimeout(timer);
-  }, [on, at.getTime(), compare, playing]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [on, at.getTime(), compare, playing, refresh]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     onOverlays(tracks.filter((t) => on.has(t.id) && states.has(t.id)).map((t) => ({
@@ -155,6 +214,17 @@ export default function TracksPanel({ timelineEnd, onOverlays }: Props) {
                   <span><b>{t.name}</b><br /><span className="dimmer mono" style={{ fontSize: 10 }}>{t.source}</span></span>
                   <input type="checkbox" checked={on.has(t.id)} onChange={() => setOn((o) => { const n = new Set(o); if (n.has(t.id)) n.delete(t.id); else n.add(t.id); return n; })} />
                 </label>
+                {on.has(t.id) && t.kind === "movement" && s?.summary && (
+                  <div className="tp-stats mono">
+                    {s.summary.latest
+                      ? <div>Last seen <b>{s.summary.latest.place}</b>, {day(s.summary.latest.day)}</div>
+                      : <div className="dimmer">No position yet</div>}
+                    <div><i style={{ background: C.path }} />{s.summary.days} days on the map, about {s.summary.km.toLocaleString()} km</div>
+                    {s.summary.people ? <div>Last reported size: ~{s.summary.people.toLocaleString()} people</div> : null}
+                    <div className="dimmer">{s.summary.reports} reports from the news</div>
+                    <Reports state={s} onFocus={onFocus} onChange={() => setRefresh((x) => x + 1)} />
+                  </div>
+                )}
                 {on.has(t.id) && t.kind === "front" && s?.snapshot && (
                   <div className="tp-stats mono">
                     <div>Map of <b>{day(s.snapshot.observed_at)}</b></div>

@@ -311,3 +311,14 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
 .read-toggle { background: none; border: none; color: var(--accent); font: 11px var(--mono); padding: 2px 0; margin-top: 4px; cursor: pointer; letter-spacing: .04em; }
 .article-text { margin-top: 6px; padding: 8px 10px; background: var(--bg-2); border-left: 2px solid var(--line-2); max-height: 420px; overflow-y: auto; }
 .item .article-text p { margin: 0 0 8px; font-size: 12.5px; line-height: 1.55; color: var(--text); display: block; -webkit-line-clamp: unset; overflow: visible; }
+.tracks-panel { max-height: calc(100% - 24px); overflow-y: auto; }
+.tracks-panel .tp-reports { margin-top: 8px; border-top: 1px solid var(--line); }
+.tracks-panel .tp-report { padding: 6px 0; border-bottom: 1px solid var(--line); font-family: var(--sans); font-size: 11.5px; line-height: 1.4; color: var(--text-2); }
+.tracks-panel .tp-report.outlier { opacity: .6; }
+.tracks-panel .tp-report.confirmed .tp-report-head b { color: var(--ok); }
+.tracks-panel .tp-report-head b { color: var(--text); }
+.tracks-panel .tp-quote { margin: 3px 0; color: var(--text-3); font-style: italic; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.tracks-panel .tp-report-actions { display: flex; gap: 10px; font: 10.5px var(--mono); }
+.tracks-panel .linkish { background: none; border: none; padding: 0; color: var(--accent); cursor: pointer; font: inherit; text-align: left; }
+.tracks-panel .tp-report-head .linkish { color: var(--text-2); }
+.tracks-panel .tag { margin-left: 6px; padding: 0 4px; border: 1px solid var(--line-2); border-radius: 3px; font: 9.5px var(--mono); color: var(--warn); }

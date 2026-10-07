@@ -278,9 +278,18 @@ export interface TrackSnapshot {
   stats: TrackStats;
 }
 
+export interface MovementSummary {
+  reports: number;
+  days: number;
+  km: number;
+  latest: { place: string; day: string } | null;
+  people: number | null;
+}
+
 export interface TrackState {
   kind: "front" | "movement";
   snapshot: TrackSnapshot | null;
   previous: TrackSnapshot | null;
+  summary?: MovementSummary;
   features: GeoJSON.FeatureCollection;
 }
