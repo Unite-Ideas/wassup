@@ -34,7 +34,7 @@ class OllamaJSON:
             try:
                 r = self.client.post(f"{self.url}/api/chat", json={
                     "model": self.model, "stream": False, "think": False, "format": schema,
-                    "options": {"temperature": temperature, "num_ctx": 16384, "num_predict": 3000},
+                    "options": {"temperature": temperature, "num_ctx": settings().ollama_num_ctx, "num_predict": 3000},
                     "messages": [{"role": "user", "content": prompt}],
                 })
                 r.raise_for_status()

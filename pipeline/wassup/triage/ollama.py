@@ -77,7 +77,7 @@ Answer:
     def decide(self, ctx: StoryContext) -> Decision:
         r = self.client.post(f"{self.url}/api/chat", json={
             "model": self.model, "stream": False, "think": False, "format": self.schema(),
-            "options": {"temperature": 0},
+            "options": {"temperature": 0, "num_ctx": settings().ollama_num_ctx},
             "messages": [{"role": "user", "content": self.prompt(ctx)}],
         })
         r.raise_for_status()

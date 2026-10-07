@@ -113,7 +113,7 @@ class ModelLocator:
         schema = {"type": "object", "properties": {"place": {"type": "string", "enum": list(options)},
                                                    "confidence": {"type": "number"}}, "required": ["place", "confidence"]}
         r = self.client.post(f"{self.url}/api/chat", json={"model": self.model, "stream": False, "think": False, "format": schema,
-                                                         "options": {"temperature": 0}, "messages": [{"role": "user", "content": prompt}]})
+                                                         "options": {"temperature": 0, "num_ctx": settings().ollama_num_ctx}, "messages": [{"role": "user", "content": prompt}]})
         r.raise_for_status()
         a = json.loads(r.json()["message"]["content"])
         return a["place"], float(a.get("confidence", 0.5))

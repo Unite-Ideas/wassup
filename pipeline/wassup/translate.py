@@ -61,7 +61,8 @@ class Translator:
             "type": "array", "items": {"type": "string"}, "minItems": len(headlines), "maxItems": len(headlines)}},
             "required": ["translations"]}
         r = self.client.post(f"{self.url}/api/chat", json={
-            "model": self.model, "stream": False, "think": False, "format": schema, "options": {"temperature": 0},
+            "model": self.model, "stream": False, "think": False, "format": schema,
+            "options": {"temperature": 0, "num_ctx": settings().ollama_num_ctx},
             "messages": [{"role": "user", "content":
                 "Translate each news headline into natural English. Keep names of people, places and "
                 "organizations in their usual English spelling. Do not add commentary. Return exactly "
@@ -115,6 +116,9 @@ def _translate_chunk(tr: Translator, rows: list[dict]) -> list[str | None] | Non
         return tr.translate([r["title"] for r in rows])
     except (ValueError, KeyError, json.JSONDecodeError) as e:
         log.warning("translation batch failed (%s); retrying one at a time", e)
+    except httpx.HTTPStatusError as e:
+        log.warning("translation batch skipped for now: Ollama said %s: %s", e.response.status_code, e.response.text[:300])
+        return None
     except httpx.HTTPError as e:
         log.warning("translation batch skipped for now: %s", e)
         return None

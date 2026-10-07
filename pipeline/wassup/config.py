@@ -50,6 +50,9 @@ class Settings:
     # Clustering and linking thresholds (cosine similarity). Defaults depend on the embed backend.
     cluster_threshold: float | None = field(default_factory=lambda: float(os.environ["CLUSTER_THRESHOLD"]) if "CLUSTER_THRESHOLD" in os.environ else None)
     link_threshold: float | None = field(default_factory=lambda: float(os.environ["LINK_THRESHOLD"]) if "LINK_THRESHOLD" in os.environ else None)
+    # Every call to the chat model asks for the same context size: Ollama reloads a model when a
+    # request asks for a different one, and with parallel requests that fails requests.
+    ollama_num_ctx: int = field(default_factory=lambda: int(_env("OLLAMA_NUM_CTX", "16384")))
     merge_threshold: float | None = field(default_factory=lambda: float(os.environ["MERGE_THRESHOLD"]) if "MERGE_THRESHOLD" in os.environ else None)
     cluster_window_hours: float = field(default_factory=lambda: _env_float("CLUSTER_WINDOW_HOURS", 72))
 
