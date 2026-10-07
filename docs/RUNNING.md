@@ -2,6 +2,21 @@
 
 Phase 0 runs on one machine: Postgres in Docker, Ollama on the host for the GPU, and the Wassup app (pipeline, API and UI) either in Docker or straight from source.
 
+## Everyday commands
+
+Open Ubuntu and run one of these. They work from any folder.
+
+| What | Command |
+| --- | --- |
+| Start (after a restart of the PC) | `bash ~/wassup/scripts/start.sh` |
+| Stop (before a restart of the PC) | `bash ~/wassup/scripts/stop.sh` |
+| Get the latest version and restart | `bash ~/wassup/scripts/update.sh` |
+| Quick health check | `bash ~/wassup/scripts/status.sh` |
+| Full report | `bash ~/wassup/scripts/status.sh report` |
+
+`start.sh` waits for Docker Desktop, starts everything, and checks that Wassup, Ollama and the
+Paperclip newsroom are all working, telling you what to do about anything that is not.
+
 ## Windows 11 setup (recommended path)
 
 ### 1. One time installs

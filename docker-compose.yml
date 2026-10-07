@@ -15,6 +15,7 @@ services:
     volumes:
       - wassup-db:/var/lib/postgresql/data
     shm_size: 2g
+    stop_grace_period: 2m   # let the database finish writing to disk when stopping
     command: >
       postgres -c shared_buffers=8GB -c effective_cache_size=32GB -c work_mem=128MB
                -c maintenance_work_mem=2GB -c max_connections=100
@@ -27,6 +28,8 @@ services:
 
   app:
     build: .
+    init: true              # pass the stop signal on so the app exits in seconds
+    stop_grace_period: 20s
     depends_on:
       db:
         condition: service_healthy
