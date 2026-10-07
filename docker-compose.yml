@@ -46,6 +46,10 @@ services:
       TRANSLATE_MODEL: ${TRANSLATE_MODEL:-}
       CONGRESS_API_KEY: ${CONGRESS_API_KEY:-}
       GDELT_BACKFILL_FILES: ${GDELT_BACKFILL_FILES:-16}
+      READ_SCOPE: ${READ_SCOPE:-tracked}        # whose full text to read: tracked, all, or off
+      READ_CONCURRENCY: ${READ_CONCURRENCY:-32}  # pages downloading at once
+      READ_WORKERS: ${READ_WORKERS:-16}          # CPU cores for pulling text out of pages
+      TRANSLATE_PARALLEL: ${TRANSLATE_PARALLEL:-3}
       NEWSROOM_WORKERS: ${NEWSROOM_WORKERS:-4}   # desk runs at once; Ollama needs OLLAMA_NUM_PARALLEL of 4 or more
       WASSUP_CONFIG_DIR: /app/config
       # Newsroom (Phase 1). Only used once you run `wassup newsroom connect`.

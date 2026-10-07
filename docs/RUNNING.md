@@ -155,6 +155,11 @@ Thumbs up and down in the story panel (MORE and LESS) teach the relevance model 
 | `MERGE_THRESHOLD` | 0.78 | Cosine similarity at which two whole stories are merged (checked every 5 minutes) |
 | `LINK_THRESHOLD` | 0.62 | Cosine similarity for "related story" strings |
 | `RETENTION_DAYS` | 30 | After this many days, article and story vectors are dropped to save disk (articles themselves are kept). Minimum 15 |
+| `READ_SCOPE` | `tracked` | Read the full text of articles in tracked stories, `all` articles, or `off` |
+| `READ_CONCURRENCY` | 32 | Article pages downloading at once (never more than two per website) |
+| `READ_WORKERS` | 16 | CPU cores used to pull article text out of pages |
+| `NEWSROOM_WORKERS` | 4 | Desk check ins running at once |
+| `TRANSLATE_PARALLEL` | 3 | Translation batches sent to the model at once |
 | `GDELT_BACKFILL_FILES` | 16 | 15 minute files fetched on first start |
 | `CONGRESS_API_KEY` | (demo key) | Free from api.congress.gov |
 

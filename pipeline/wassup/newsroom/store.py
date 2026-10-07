@@ -104,10 +104,14 @@ def story_digest(conn, story_id: int, max_items: int = 14) -> dict:
     items = conn.execute(
         """SELECT DISTINCT ON (coalesce(i.title_en, i.title)) coalesce(i.title_en, i.title) AS title, i.summary,
                   coalesce(i.outlet, src.name) AS outlet, coalesce(i.outlet_tier, src.trust_tier) AS tier,
-                  (i.outlet_state OR src.state_media) AS state, i.language, i.published_at
-           FROM items i JOIN sources src ON src.id = i.source_id WHERE i.story_id = %s
-           ORDER BY coalesce(i.title_en, i.title), i.published_at DESC""", (story_id,)).fetchall()
-    items = sorted(items, key=lambda r: (r["tier"] == "S", "ACBUS".find(r["tier"] or "U"), -r["published_at"].timestamp()))[:max_items]
+                  (i.outlet_state OR src.state_media) AS state, i.language, i.published_at, t.body
+           FROM items i JOIN sources src ON src.id = i.source_id
+           LEFT JOIN item_texts t ON t.item_id = i.id AND t.status = 'ok'
+           WHERE i.story_id = %s
+           ORDER BY coalesce(i.title_en, i.title), (t.body IS NULL), i.published_at DESC""", (story_id,)).fetchall()
+    # Trusted outlets first, and among them articles whose full text has been read.
+    items = sorted(items, key=lambda r: (r["tier"] == "S", "ACBUS".find(r["tier"] or "U"), r["body"] is None,
+                                         -r["published_at"].timestamp()))[:max_items]
     places = [r["name"] for r in conn.execute(
         "SELECT p.name FROM story_places sp JOIN places p ON p.id = sp.place_id WHERE sp.story_id = %s ORDER BY sp.weight DESC LIMIT 6",
         (story_id,))]
@@ -122,8 +126,15 @@ def digest_text(d: dict) -> str:
              f"{d['item_count']} articles from {d['source_count']} outlets in {d['country_count']} countries"
              f"{', BREAKING' if d['breaking'] else ''}, first seen {d['first_seen']:%b %d %H:%M}, latest {d['last_seen']:%b %d %H:%M} UTC. Places: {', '.join(d['places']) or 'unknown'}. "
              f"Actors: {', '.join(d['actors']) or 'unknown'}."]
+    # The full text of the best few articles, when it has been read; a summary line for the rest.
+    texts = 0
     for it in d["items"]:
         flag = " [STATE MEDIA]" if it["state"] else ""
+        if it.get("body") and texts < 4:
+            texts += 1
+            body = " ".join(it["body"].split())[:1500]
+            lines.append(f"- ({it['outlet']}, tier {it['tier']}{flag}, {it['published_at']:%b %d %H:%M}) {it['title']}\n  Article: {body}")
+            continue
         summary = f" | {it['summary'][:220]}" if it.get("summary") else ""
         lines.append(f"- ({it['outlet']}, tier {it['tier']}{flag}, {it['published_at']:%b %d %H:%M}) {it['title']}{summary}")
     if d.get("brief"):

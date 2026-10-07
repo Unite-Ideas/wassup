@@ -17,6 +17,7 @@ from .collectors.government import CongressCollector, FederalRegisterCollector
 from .collectors.rss import RssCollector
 from .locate import run_locate
 from .newsroom.manager import run_manager
+from .reader import run_reader
 from .retention import run_retention
 from .signals import update_breaking, update_links
 from .tracks.deepstate import DeepStateCollector
@@ -48,6 +49,7 @@ def _collector_loop(c: Collector, stop: threading.Event) -> None:
 LANES: list[tuple[str, list[tuple[str, float, Callable]]]] = [
     ("cluster", [("process", 5, process_new), ("merge", 300, merge_stories)]),
     ("translate", [("translate", 10, run_translate)]),
+    ("read", [("read", 15, run_reader)]),
     ("triage", [("triage", 15, run_triage)]),
     ("signals", [("breaking", 120, update_breaking), ("links", 600, update_links)]),
     ("locate", [("locate", 120, run_locate)]),

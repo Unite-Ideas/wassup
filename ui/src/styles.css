@@ -305,3 +305,9 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
 .tracks-panel .tp-row .btn.on { border-color: var(--accent); color: var(--accent); }
 .tracks-panel input[type=range] { width: 100%; margin: 8px 0; accent-color: var(--accent); }
 .tracks-panel .tp-legend { display: flex; gap: 12px; margin-top: 8px; font-size: 10px; color: var(--text-3); }
+.read-toggle { background: none; border: none; color: var(--accent); font: 11px var(--mono); padding: 2px 0; cursor: pointer; letter-spacing: .04em; }
+.article-text { margin-top: 6px; padding: 8px 10px; background: var(--bg-2); border-left: 2px solid var(--line-2); max-height: 420px; overflow-y: auto; font-size: 12.5px; line-height: 1.55; color: var(--text); }
+.article-text p { margin: 0 0 8px; }
+.read-toggle { background: none; border: none; color: var(--accent); font: 11px var(--mono); padding: 2px 0; margin-top: 4px; cursor: pointer; letter-spacing: .04em; }
+.article-text { margin-top: 6px; padding: 8px 10px; background: var(--bg-2); border-left: 2px solid var(--line-2); max-height: 420px; overflow-y: auto; }
+.item .article-text p { margin: 0 0 8px; font-size: 12.5px; line-height: 1.55; color: var(--text); display: block; -webkit-line-clamp: unset; overflow: visible; }

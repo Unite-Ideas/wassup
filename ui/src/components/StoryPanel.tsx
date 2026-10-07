@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { api } from "../lib/api";
 import type { Desk, Item, StoryDetail } from "../lib/types";
 import { EXCLUDED_LABEL, TIER_LABEL, ago, deskColor, languageName, stamp } from "../lib/format";
 import { Markdown } from "../lib/markdown";
@@ -48,6 +49,12 @@ function Codes({ list }: { list: string[] }) {
 }
 
 function ItemRow({ it }: { it: Item & { copies: number } }) {
+  const [text, setText] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
+  const toggle = () => {
+    if (!open && text == null) api.itemText(it.id).then((t) => setText(t.body ?? "")).catch(() => setText(""));
+    setOpen(!open);
+  };
   return (
     <div className="item">
       <div className="item-head">
@@ -60,7 +67,11 @@ function ItemRow({ it }: { it: Item & { copies: number } }) {
       </div>
       <a className="t" href={it.url} target="_blank" rel="noreferrer noopener">{it.title}</a>
       {it.title_original && <div className="original">{it.title_original}</div>}
-      {it.summary && <p>{it.summary}</p>}
+      {it.summary ? <p>{it.summary}</p> : it.excerpt && !open ? <p>{it.excerpt}{it.excerpt.length >= 360 ? "..." : ""}</p> : null}
+      {it.has_text && (
+        <button className="read-toggle" onClick={toggle}>{open ? "Hide article" : "Read full article"}</button>
+      )}
+      {open && <div className="article-text">{text == null ? "Loading..." : text.split(/\n+/).map((para, i) => <p key={i}>{para}</p>)}</div>}
     </div>
   );
 }

@@ -88,6 +88,9 @@ export interface Item {
   state_media: boolean;
   source_kind: string;
   meta: { themes?: string[]; tone?: number; feed?: string; kind?: string };
+  excerpt?: string | null;
+  has_text?: boolean | null;
+  lead_image?: string | null;
 }
 
 export interface Entity {

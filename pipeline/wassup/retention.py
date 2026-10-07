@@ -4,7 +4,8 @@ Most of the space goes to embeddings: a 4 KB vector for every article and every 
 only needed while a story can still grow and for searches over recent weeks, so after
 RETENTION_DAYS (default 30) Wassup drops them. Articles, headlines, places and briefs are all
 kept; only the vectors go. Stories you gave feedback on keep theirs, because your feedback
-profile is built from them. Old newsroom activity is trimmed after 90 days.
+profile is built from them. Old newsroom activity is trimmed after 90 days, and the full text
+of articles outside tracked stories after RETENTION_DAYS.
 
 The freed space is reused by new data, so the files stop growing rather than shrinking.
 """
@@ -41,6 +42,12 @@ def run_retention(conn: psycopg.Connection, batch: int = 20000, max_seconds: flo
             done += n
             if n < batch:
                 break
+    # Full text of articles outside tracked stories, and failed reads, are not kept as long.
+    n = conn.execute("""DELETE FROM item_texts t USING items i LEFT JOIN stories s ON s.id = i.story_id
+                        WHERE t.item_id = i.id AND t.fetched_at < now() - %s * interval '1 day'
+                          AND (t.status <> 'ok' OR NOT coalesce(s.routed, false))""", (days,)).rowcount
+    conn.commit()
+    done += n
     n = conn.execute("DELETE FROM newsroom_events WHERE created_at < now() - interval '90 days'").rowcount
     conn.commit()
     done += n

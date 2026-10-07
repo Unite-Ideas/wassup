@@ -174,8 +174,9 @@ def story(story_id: int) -> dict:
             """SELECT i.id, coalesce(i.title_en, i.title) AS title, CASE WHEN i.title_en IS NOT NULL THEN i.title END AS title_original,
                       i.summary, i.url, i.language, i.published_at, i.meta,
                       coalesce(i.outlet, src.name) outlet, coalesce(i.outlet_tier, src.trust_tier) tier,
-                      (i.outlet_state OR src.state_media) state_media, src.kind source_kind
-               FROM items i JOIN sources src ON src.id = i.source_id
+                      (i.outlet_state OR src.state_media) state_media, src.kind source_kind,
+                      left(t.body, 360) AS excerpt, (t.status = 'ok') AS has_text, t.lead_image
+               FROM items i JOIN sources src ON src.id = i.source_id LEFT JOIN item_texts t ON t.item_id = i.id
                WHERE i.story_id = %s ORDER BY i.published_at DESC LIMIT 300""", (story_id,)).fetchall()
         places = conn.execute(
             """SELECT p.id, p.name, p.country, p.kind, p.lat, p.lon, sp.weight, (p.id = %s) AS is_primary FROM story_places sp
@@ -328,6 +329,16 @@ def fix_location(story_id: int, body: LocationIn) -> dict:
                      remove_place_id=old if old and old != place_id else None, record=True)
         conn.commit()
     return {"ok": True}
+
+
+@app.get("/api/items/{item_id}/text")
+def item_text(item_id: int) -> dict:
+    """The full text of one article, when it has been read."""
+    with db.connect() as conn:
+        t = conn.execute("SELECT status, body, lead_image, images, fetched_at FROM item_texts WHERE item_id = %s", (item_id,)).fetchone()
+    if not t:
+        raise HTTPException(404, "not read yet")
+    return t
 
 
 class FeedbackIn(BaseModel):
