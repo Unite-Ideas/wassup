@@ -348,3 +348,16 @@ RETURNS geometry LANGUAGE sql IMMUTABLE AS $$
         WHERE h.path[1] > 0 AND ST_Area(h.geom::geography) >= min_m2))))
     FROM ST_Dump(g) p
 $$;
+
+-- Full text of articles (reader.py), kept apart from items so the items table stays lean.
+CREATE TABLE IF NOT EXISTS item_texts (
+    item_id         bigint PRIMARY KEY REFERENCES items(id) ON DELETE CASCADE,
+    status          text NOT NULL,                  -- ok | short | blocked | failed | skipped
+    http_status     integer,
+    body            text,
+    chars           integer NOT NULL DEFAULT 0,
+    lead_image      text,
+    images          jsonb NOT NULL DEFAULT '[]'::jsonb,   -- [{src, caption}] photos with captions
+    fetched_at      timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS item_texts_fetched_idx ON item_texts (fetched_at);
