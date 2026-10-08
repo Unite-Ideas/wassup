@@ -166,8 +166,13 @@ too) is followed. Use a separate account with its own phone number, not your per
    `docker compose exec app wassup telegram login` and type the code Telegram sends to the account
    (and its two step password, if it has one).
 
-Within a minute Wassup starts joining the followed channels, about one a minute, and they show
-**live** in the SOURCES tab. Wassup only reads: it never posts, never opens files, and joins
+Wassup then joins the followed channels gently, so Telegram does not take a new account for a
+spam bot: 8 on the first day (pinned channels and seeds first), 8 more each day after, up to 40 a
+day, never more than one every 6 minutes. If Telegram ever asks it to slow down, it stops joining
+for at least a day. Joined channels show **live** in the SOURCES tab; the rest are still read from
+their public pages meanwhile, so nothing is missed. To watch it:
+`docker compose logs --since 1h app | grep -i telegram`. The pace is under `telegram: live:` in
+`config/social.yaml`. Wassup only reads: it never posts, never opens files, and joins
 channels only, never groups. The login is kept in `data/telegram`; delete that folder to log out.
 
 ## Tuning what you see

@@ -81,3 +81,20 @@ def test_web_reader_hands_channels_without_a_page_to_the_account(monkeypatch):
         col.run(conn)
         row = conn.execute("SELECT status, via FROM social_accounts WHERE handle = 'hidden_preview'").fetchone()
         assert row["status"] == "candidate" and row["via"] == "api"
+
+
+def test_join_pacing_ramps_up_and_respects_pauses():
+    from wassup.social.telegram_live import LIVE_DEFAULTS, joins_allowed, may_join
+
+    c = dict(LIVE_DEFAULTS)
+    assert [joins_allowed(d, c) for d in (0, 1, 2, 4, 30)] == [8, 16, 24, 40, 40]
+    now = datetime(2026, 10, 8, 12, tzinfo=timezone.utc)
+    assert may_join({}, 0, c, now)  # first ever join
+    st = {"since": "2026-10-08", "day": "2026-10-08", "count": 8}
+    assert not may_join(st, 8, c, now)  # first day used up
+    assert may_join(st, 8, c, now + timedelta(days=1))  # a new day, a bigger allowance
+    assert not may_join({"since": "2026-10-01", "day": "2026-10-08", "count": 40}, 300, c, now)
+    assert not may_join({"since": "2026-10-01"}, 450, c, now)  # channel limit
+    paused = {"since": "2026-10-01", "paused_until": (now + timedelta(hours=3)).isoformat()}
+    assert not may_join(paused, 10, c, now)
+    assert may_join(paused, 10, c, now + timedelta(hours=4))

@@ -12,6 +12,16 @@ telegram:
   candidate_check_minutes: 120
   max_following: 300
   max_candidates: 150
+  live:                      # the logged in account (wassup telegram login); gentle on purpose
+    join_every_minutes: 6    # at most one channel joined per this many minutes
+    joins_first_day: 8       # channels joined on the first day
+    joins_more_each_day: 8   # allowance grows by this much each day after
+    max_joins_per_day: 40
+    max_joined: 450          # Telegram allows 500 per account; leave room for your own
+    catch_up_minutes: 20     # how often joined channels are asked for anything missed
+    catch_up_limit: 20       # posts asked for per channel per catch up
+    catch_up_pause_seconds: 3
+    candidate_hours: 4       # how often candidates with no public page are read
   seeds:
     russia_ukraine:
       - {handle: DeepStateUA, kind: osint, lean: Ukraine}

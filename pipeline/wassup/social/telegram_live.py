@@ -8,10 +8,12 @@ for a separate account, not your personal one), then log in once:
 
 The login is kept in data/telegram, so it survives restarts. While Wassup runs:
 
-- Followed channels are joined by the account, one a minute at most so Telegram does not take it
-  for a spam bot, up to MAX_JOINED. Joined channels deliver new posts as they are published and
-  are no longer fetched from their web page.
-- Every 10 minutes each joined channel is asked for anything missed (a restart, a dropped
+- Followed channels are joined by the account, gently so Telegram does not take a new account
+  for a spam bot: a few a day at first (pinned channels and seeds first), a few more each day
+  after, never more than one every few minutes, and a full stop for a day if Telegram ever asks
+  to slow down. The pace is set under telegram.live in config/social.yaml. Joined channels
+  deliver new posts as they are published and are no longer fetched from their web page.
+- Every 20 minutes each joined channel is asked for anything missed (a restart, a dropped
   connection), and candidates without a public page are read the same way, without joining.
 - Channels you join yourself in the Telegram app on that account, private ones included, are
   picked up and followed, marked as added by you.
@@ -28,18 +30,42 @@ import os
 import re
 import threading
 import time
-from datetime import timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from .. import db
-from ..config import settings
+from ..config import load_yaml, settings
 
 log = logging.getLogger(__name__)
 
-MAX_JOINED = 450        # Telegram allows 500 channels per account; leave room for your own
-JOIN_EVERY_S = 60
-CATCH_UP_EVERY_S = 600
+# Gentle by default. Telegram allows 500 channels per account; leave room for your own.
+LIVE_DEFAULTS = {"max_joined": 450, "join_every_minutes": 6, "joins_first_day": 8, "joins_more_each_day": 8,
+                 "max_joins_per_day": 40, "catch_up_minutes": 20, "catch_up_limit": 20,
+                 "catch_up_pause_seconds": 3, "candidate_hours": 4}
 _TME = re.compile(r"https?://t\.me/(?:s/)?([A-Za-z][A-Za-z0-9_]{3,31})", re.I)
+
+
+def live_cfg() -> dict:
+    c = (load_yaml("social.yaml").get("telegram") or {}).get("live") or {}
+    return {k: c.get(k, v) for k, v in LIVE_DEFAULTS.items()}
+
+
+def joins_allowed(day_number: int, c: dict) -> int:
+    """How many channels may be joined on the Nth day of reading (day 0 is the first)."""
+    return min(c["max_joins_per_day"], c["joins_first_day"] + c["joins_more_each_day"] * max(0, day_number))
+
+
+def may_join(st: dict, joined: int, c: dict, now: datetime) -> bool:
+    """Within today's allowance, under the channel limit, and not told by Telegram to slow down.
+    `st` is the join log kept in the kv table: first day, today's day and count, pause."""
+    if joined >= c["max_joined"]:
+        return False
+    if st.get("paused_until") and datetime.fromisoformat(st["paused_until"]) > now:
+        return False
+    today = now.date()
+    n = st.get("count", 0) if st.get("day") == today.isoformat() else 0
+    since = date.fromisoformat(st.get("since") or today.isoformat())
+    return n < joins_allowed((today - since).days, c)
 
 
 def _creds() -> tuple[int, str, str] | None:
@@ -65,7 +91,7 @@ def _client():
 
     api_id, api_hash, _ = _creds()
     return TelegramClient(str(session_path()), api_id, api_hash, device_model="Wassup", app_version="1.0",
-                          flood_sleep_threshold=120)
+                          flood_sleep_threshold=60)
 
 
 def login() -> None:
@@ -145,17 +171,41 @@ class LiveReader:
                 await asyncio.to_thread(self._store, acct_id, [to_post(ev.message, self.usernames)], None)
 
         await self._sync_dialogs()
-        last_join = last_catch = 0.0
+        last_join = time.time()  # the first join waits a full interval after a (re)start
+        last_catch = 0.0
         while self.client.is_connected():
+            c = live_cfg()
             now = time.time()
-            if now - last_join >= JOIN_EVERY_S:
+            if now - last_join >= c["join_every_minutes"] * 60:
                 last_join = now
-                await self._join_one()
-            if now - last_catch >= CATCH_UP_EVERY_S:
+                if may_join(self._join_log(), len(set(self.by_tg.values())), c, datetime.now(timezone.utc)):
+                    await self._join_one()
+            if now - last_catch >= c["catch_up_minutes"] * 60:
                 last_catch = now
                 await self._sync_dialogs()
-                await self._catch_up()
+                await self._catch_up(c)
             await asyncio.sleep(5)
+
+    # --- pacing ------------------------------------------------------------------------------
+
+    def _join_log(self, joined: bool = False, pause_until: datetime | None = None) -> dict:
+        """Read the join log, noting a join or a pause first if asked."""
+        with db.connect() as conn:
+            st = db.kv_get(conn, "telegram_joins") or {}
+            today = datetime.now(timezone.utc).date().isoformat()
+            changed = not st.get("since")
+            st.setdefault("since", today)
+            if joined:
+                st["count"] = (st.get("count", 0) if st.get("day") == today else 0) + 1
+                st["day"] = today
+                changed = True
+            if pause_until is not None:
+                st["paused_until"] = pause_until.isoformat()
+                changed = True
+            if changed:
+                db.kv_set(conn, "telegram_joins", st)
+                conn.commit()
+        return st
 
     # --- bookkeeping -------------------------------------------------------------------------
 
@@ -183,17 +233,16 @@ class LiveReader:
                 self.by_tg[int(f"-100{ent.id}")] = row["id"]
 
     async def _join_one(self) -> None:
-        """Join the next followed channel that is still read from its web page."""
+        """Join the next followed channel that is still read from its web page: pinned channels
+        first, then seeds, then the best scored."""
         from telethon.errors import ChannelPrivateError, FloodWaitError, UsernameInvalidError, UsernameNotOccupiedError
         from telethon.tl.functions.channels import JoinChannelRequest
 
-        if len({v for v in self.by_tg.values()}) >= MAX_JOINED:
-            return
         with db.connect() as conn:
             a = conn.execute(
                 """SELECT id, handle FROM social_accounts WHERE platform = 'telegram' AND status = 'following' AND NOT banned
                    AND (via = 'web' OR tg_id IS NULL) AND handle NOT LIKE 'c/%%'
-                   ORDER BY pinned DESC, score DESC NULLS LAST LIMIT 1""").fetchone()
+                   ORDER BY pinned DESC, (added_by = 'seed') DESC, score DESC NULLS LAST LIMIT 1""").fetchone()
         if not a:
             return
         try:
@@ -202,8 +251,11 @@ class LiveReader:
                 raise ValueError("a group, not a channel")
             await self.client(JoinChannelRequest(ent))
         except FloodWaitError as e:
-            log.warning("telegram asks to wait %ss before joining more channels", e.seconds)
-            await asyncio.sleep(min(e.seconds, 3600))
+            # Telegram says slow down: no joins for twice what it asks, and at least a day.
+            until = datetime.now(timezone.utc) + timedelta(seconds=max(2 * e.seconds, 86400))
+            self._join_log(pause_until=until)
+            log.warning("telegram asked to wait %ss before joining more; no joins until %s",
+                        e.seconds, until.strftime("%Y-%m-%d %H:%M UTC"))
             return
         except (ValueError, UsernameNotOccupiedError, UsernameInvalidError, ChannelPrivateError) as e:
             with db.connect() as conn:
@@ -218,9 +270,10 @@ class LiveReader:
             conn.execute("UPDATE social_accounts SET via = 'api', tg_id = %s, name = coalesce(name, %s) WHERE id = %s",
                          (ent.id, ent.title, a["id"]))
             conn.commit()
-        log.info("telegram: joined @%s", a["handle"])
+        n = self._join_log(joined=True).get("count")
+        log.info("telegram: joined @%s (%s today)", a["handle"], n)
 
-    async def _catch_up(self) -> None:
+    async def _catch_up(self, c: dict) -> None:
         """Anything missed while away, for joined channels; and reading candidates with no public page."""
         from telethon.errors import FloodWaitError
 
@@ -228,14 +281,16 @@ class LiveReader:
             accts = conn.execute(
                 """SELECT * FROM social_accounts WHERE platform = 'telegram' AND via = 'api' AND NOT banned
                    AND status IN ('following', 'candidate')
-                   AND (status = 'following' OR last_checked_at IS NULL OR last_checked_at < now() - interval '2 hours')""").fetchall()
+                   AND (status = 'following' OR last_checked_at IS NULL OR last_checked_at < now() - %s * interval '1 hour')""",
+                (c["candidate_hours"],)).fetchall()
         for a in accts:
             try:
                 target = a["tg_id"] if a["handle"].startswith("c/") else a["handle"]
-                msgs = await self.client.get_messages(target, limit=50, min_id=a["last_post_id"] or 0)
+                msgs = await self.client.get_messages(target, limit=c["catch_up_limit"], min_id=a["last_post_id"] or 0)
             except FloodWaitError as e:
-                await asyncio.sleep(min(e.seconds, 600))
-                continue
+                log.warning("telegram asked to wait %ss while catching up; the rest waits for the next round", e.seconds)
+                await asyncio.sleep(min(e.seconds + 30, 900))
+                return
             except Exception as e:
                 with db.connect() as conn:
                     conn.execute("UPDATE social_accounts SET last_error = %s, last_checked_at = now() WHERE id = %s",
@@ -244,7 +299,7 @@ class LiveReader:
                 continue
             posts = [p for p in (to_post(m, self.usernames) for m in msgs if m and not getattr(m, "action", None)) if p]
             await asyncio.to_thread(self._store, a["id"], posts, getattr(msgs, "total", None))
-            await asyncio.sleep(1)
+            await asyncio.sleep(c["catch_up_pause_seconds"])
 
     def _store(self, acct_id: int, posts: list[dict], subscribers) -> None:
         from .telegram import store_posts
