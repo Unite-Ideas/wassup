@@ -68,6 +68,8 @@ FLIGHT = re.compile(r"курс(ом)? на|повз|у напрямку|в на�
 IMPACT = re.compile(r"влуч|попад|уражен|поражен|вибух|взрыв|explo|\bhit|struck|strike|damag|пошкодж|поврежд|пожеж|пожар|"
                     r"\bfire|загин|погиб|поранен|ранен|killed|injur|збит|сбит|знищ|уничтож|intercept|shot down|destroy|"
                     r"انفجار|غارة|قصف|استهداف|פיצוץ|נפילה|פגיעה", re.I)
+# OSINT channels often give the exact spot: "Coordinates: 50.4533461, 30.4356499".
+COORDS = re.compile(r"(?<![\d.])(-?\d{1,2}\.\d{3,})\s*[,;]\s*(-?\d{1,3}\.\d{3,})(?![\d.])")
 _PLACE_WORDS = {"village", "town", "city", "of", "the", "settlement", "district", "село", "селище", "місто", "город",
                 "поселок", "посёлок", "смт", "пгт", "м", "с", "г", "п", "selo", "smt", "al"}
 
@@ -236,6 +238,15 @@ def _quote_ok(quote: str, post: str, names: list[str]) -> bool:
     return False
 
 
+def exact_spot(text: str, near: tuple[float, float], max_km: float = 30) -> tuple[float, float] | None:
+    """Coordinates given in the post, if they are close to the named place (so they belong to it)."""
+    for m in COORDS.finditer(text or ""):
+        lat, lon = float(m.group(1)), float(m.group(2))
+        if -90 <= lat <= 90 and -180 <= lon <= 180 and km(near, (lat, lon)) <= max_km:
+            return lat, lon
+    return None
+
+
 def _parse_date(s: str | None, published: datetime) -> tuple[datetime, bool]:
     if s:
         try:
@@ -326,6 +337,9 @@ def _store(conn, tracks: dict[str, int], it: dict, strikes: list[dict]) -> int:
         where = geocode(s["place"], s.get("place_original"), s.get("province"), s.get("country"))
         if where is None:
             continue
+        spot = exact_spot(it["text"], (where["lat"], where["lon"]))
+        if spot:
+            where = {**where, "lat": spot[0], "lon": spot[1], "how": "coordinates"}
         region = region_of(where["country"], where["lat"], where["lon"])
         if region is None or (where["name"], region) in seen:
             continue
@@ -341,7 +355,7 @@ def _store(conn, tracks: dict[str, int], it: dict, strikes: list[dict]) -> int:
             """INSERT INTO track_observations (track_id, observed_at, category, geom, label, props, source_url, item_id, confidence)
                VALUES (%s, %s, 'strike', ST_SetSRID(ST_MakePoint(%s, %s), 4326), %s, %s, %s, %s, %s)""",
             (tracks[region], when, where["lon"], where["lat"], s["place"].strip()[:80], Jsonb(props), it["url"], it["id"],
-             0.9 if where["how"] == "list" else 0.7))
+             0.7 if where["how"] == "gazetteer" else 0.9))
         n += 1
     return n
 

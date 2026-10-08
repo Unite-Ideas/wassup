@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from wassup.tracks.strikes import STRIKE, _quote_ok, geocode, group_strikes, unorm
+from wassup.tracks.strikes import STRIKE, _quote_ok, exact_spot, geocode, group_strikes, unorm
 
 
 def test_unorm_handles_any_script():
@@ -33,6 +33,13 @@ def test_quote_must_come_from_the_post_and_name_the_place():
     assert not _quote_ok(flight, flight, ["Zhashkiv", "Жашків"])  # on its way, not a strike
     hit = "БпЛА курсом на Жашків, згодом влучання в обʼєкт у Жашкові."
     assert _quote_ok(hit, hit, ["Zhashkiv", "Жашків"])
+
+
+def test_exact_spot_from_the_post():
+    kyiv = (50.4547, 30.5238)
+    assert exact_spot("Hit in Kyiv.\n📍 Coordinates: 50.4533461, 30.4356499", kyiv) == (50.4533461, 30.4356499)
+    assert exact_spot("Coordinates: 48.28, 37.17 and 49.9818, 36.2548", kyiv) is None  # elsewhere: not this place
+    assert exact_spot("Prices rose 3.5, 4.25 percent", kyiv) is None
 
 
 def test_prefilter():
