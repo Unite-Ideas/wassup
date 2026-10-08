@@ -26,6 +26,25 @@ services:
       retries: 20
     restart: unless-stopped
 
+  # Nightly database backups into BACKUP_DIR (scripts/backup-loop.sh). Same image as the
+  # database, so pg_dump always matches it.
+  backup:
+    build: ./db
+    init: true
+    entrypoint: ["bash", "/scripts/backup-loop.sh"]
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: wassup
+      BACKUP_AT: ${BACKUP_AT:-03:30}      # time of day, in TZ
+      BACKUP_KEEP: ${BACKUP_KEEP:-7}      # how many nightly backups to keep
+      TZ: ${TZ:-UTC}                      # your time zone, for example America/Chicago
+    volumes:
+      - ${BACKUP_DIR:-./backups}:/backups
+      - ./scripts/backup-loop.sh:/scripts/backup-loop.sh:ro
+    restart: unless-stopped
+
   app:
     build: .
     init: true              # pass the stop signal on so the app exits in seconds

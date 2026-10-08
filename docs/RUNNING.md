@@ -13,9 +13,33 @@ Open Ubuntu and run one of these. They work from any folder.
 | Get the latest version and restart | `bash ~/wassup/scripts/update.sh` |
 | Quick health check | `bash ~/wassup/scripts/status.sh` |
 | Full report | `bash ~/wassup/scripts/status.sh report` |
+| Back up the database now | `bash ~/wassup/scripts/backup.sh` |
+| List backups, or restore one | `bash ~/wassup/scripts/restore.sh` |
 
 `start.sh` waits for Docker Desktop, starts everything, and checks that Wassup, Ollama and the
 Paperclip newsroom are all working, telling you what to do about anything that is not.
+
+## Backups
+
+The database is backed up every night at 3:30 (`BACKUP_AT`, in the time zone `TZ`, both in
+`.env`), and the newest 7 backups are kept (`BACKUP_KEEP`). Wassup keeps running while it does.
+A backup counts only once it is complete, and old ones are removed only after a new one works.
+`status.sh` shows the last one.
+
+They go to `~/wassup/backups` unless you set `BACKUP_DIR`. That folder is inside Ubuntu's own
+virtual disk, so if that disk is lost the backups go with it. Better, point it at a Windows
+drive, ideally a different physical disk, for example in `.env`:
+
+```
+BACKUP_DIR=/mnt/d/WassupBackups
+TZ=America/Chicago
+```
+
+Then `bash ~/wassup/scripts/update.sh`. To restore, run `bash ~/wassup/scripts/restore.sh` to
+list the backups and `bash ~/wassup/scripts/restore.sh wassup-20261009-0330.dump` to put one
+back. It asks first, because everything collected after that backup is lost. Map files
+(`data/maps`) and the Telegram login (`data/telegram`) are not in the database; they can be
+downloaded or logged in again.
 
 ## Windows 11 setup (recommended path)
 
