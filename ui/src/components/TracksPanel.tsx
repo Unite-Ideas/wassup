@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../lib/api";
-import type { Track, TrackState } from "../lib/types";
+import type { MovementSummary, StrikeSummary, Track, TrackState } from "../lib/types";
 import type { Overlay, OverlayLayer } from "./MapView";
 
 interface Props {
@@ -12,6 +12,9 @@ interface Props {
 
 const DAY = 86400e3;
 const COMPARE = [1, 7, 30];
+const STRIKE = { hit: "#ff5a1f", claimed: "#ffb020", explosions_heard: "#ffe08a", intercepted: "#8fa3b8" };
+const WEAPON: Record<string, string> = { missile: "missile", drone: "drone", glide_bomb: "glide bomb", airstrike: "air strike",
+  artillery: "artillery", rocket: "rocket", unknown: "other" };
 const C = { occupied: "#ff3b5c", contested: "#a3adb8", liberated: "#4fa3ff", gained: "#ff1f3d", lost: "#3d8bff", attack: "#ffb020", path: "#00e5ff" };
 
 type L = OverlayLayer;
@@ -67,6 +70,85 @@ function movementLayers(id: string): L[] {
       paint: { "text-color": "#d7e3ef", "text-halo-color": "#05080d", "text-halo-width": 1.4 },
     },
   ];
+}
+
+function strikeLayers(id: string): L[] {
+  const reports = ["sqrt", ["get", "reports"]];
+  return [
+    {
+      id: `${id}-strike`, type: "circle", filter: cat("strike"),
+      paint: {
+        "circle-radius": ["interpolate", ["linear"], ["zoom"], 3, ["+", 2, reports], 10, ["+", 5, ["*", 2.5, reports]]] as never,
+        "circle-color": ["match", ["get", "outcome"], "hit", STRIKE.hit, "claimed", STRIKE.claimed, "intercepted", STRIKE.intercepted,
+                         STRIKE.explosions_heard] as never,
+        "circle-opacity": ["interpolate", ["linear"], ["get", "age_hours"], 0, 0.95, 168, 0.35] as never,
+        "circle-stroke-color": ["case", ["get", "corroborated"], "#ffffff", "#05080d"] as never,
+        "circle-stroke-width": ["case", ["get", "corroborated"], 1.4, 0.8] as never,
+      },
+    },
+    {
+      id: `${id}-strike-label`, type: "symbol", filter: cat("strike"), minzoom: 7,
+      layout: { "text-field": ["get", "label"], "text-font": ["Noto Sans Regular"], "text-size": 10.5, "text-offset": [0, 1.1],
+                "text-anchor": "top", "text-optional": true },
+      paint: { "text-color": "#ffd0b8", "text-halo-color": "#05080d", "text-halo-width": 1.4 },
+    },
+  ];
+}
+
+function layersFor(t: Track): L[] {
+  const id = `track-${t.id}`;
+  return t.kind === "front" ? frontLayers(id) : t.kind === "strikes" ? strikeLayers(id) : movementLayers(id);
+}
+
+const hhmm = (s: string) => new Date(s).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+
+function Strikes({ state, onFocus, onChange }: { state: TrackState; onFocus: (lng: number, lat: number) => void; onChange: () => void }) {
+  const sum = state.summary as StrikeSummary;
+  const events = state.features.features
+    .filter((f) => f.properties?.category === "strike")
+    .sort((a, b) => String(b.properties?.last).localeCompare(String(a.properties?.last)))
+    .slice(0, 12);
+  const reject = (ids: number[]) => Promise.all(ids.map((i) => api.setObservation(i, "rejected"))).then(onChange).catch(() => undefined);
+  const span = sum.days === 1 ? "day" : `${sum.days} days`;
+  const weapons = Object.entries(sum.weapons).sort((a, b) => b[1] - a[1]).map(([w, n]) => `${WEAPON[w] ?? w} ${n}`).join(" · ");
+  return (
+    <div className="tp-stats mono">
+      <div><b>{sum.strikes}</b> strikes in the last {span}</div>
+      <div><i style={{ background: STRIKE.hit }} />{sum.hits} hits <i style={{ background: STRIKE.intercepted, marginLeft: 8 }} />{sum.intercepted} intercepted</div>
+      <div>{sum.corroborated} reported by 2+ channels or outlets{sum.killed ? `, ${sum.killed} killed` : ""}</div>
+      {weapons && <div className="dimmer">{weapons}</div>}
+      {events.length ? (
+        <div className="tp-reports">
+          {events.map((f) => {
+            const p = f.properties as Record<string, any>;
+            const [lng, lat] = (f.geometry as GeoJSON.Point).coordinates;
+            return (
+              <div key={p.ids[0]} className="tp-report">
+                <div className="tp-report-head">
+                  <button className="linkish" onClick={() => onFocus(lng, lat)} title="Show on the map">
+                    {hhmm(p.first)} · <b>{p.label}</b>
+                  </button>
+                  <span className="dimmer"> · {WEAPON[p.weapon] ?? p.weapon}, {String(p.outcome).replace("_", " ")}</span>
+                  {!p.corroborated && <span className="tag" title="Only one channel has reported it so far">1 source</span>}
+                </div>
+                <div className="dimmer">
+                  {[p.target, p.killed ? `${p.killed} killed` : "", p.injured ? `${p.injured} injured` : ""].filter(Boolean).join(" · ")}
+                </div>
+                {p.quote && <div className="tp-quote">“{p.quote}”</div>}
+                <div className="tp-report-actions">
+                  {(p.sources as { handle: string; url: string }[]).slice(0, 3).map((s) => (
+                    <a key={s.url} href={s.url} target="_blank" rel="noreferrer noopener">@{s.handle}</a>
+                  ))}
+                  {p.channels > 3 && <span className="dimmer">+{p.channels - 3}</span>}
+                  <button className="linkish" onClick={() => reject(p.ids)} title="Not a strike, or in the wrong place: hide it for good">✕ reject</button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : <div className="dimmer" style={{ marginTop: 6 }}>None reported in this span.</div>}
+    </div>
+  );
 }
 
 function Reports({ state, onFocus, onChange }: { state: TrackState; onFocus: (lng: number, lat: number) => void; onChange: () => void }) {
@@ -170,7 +252,7 @@ export default function TracksPanel({ timelineEnd, onOverlays, onFocus }: Props)
     onOverlays(tracks.filter((t) => on.has(t.id) && states.has(t.id)).map((t) => ({
       id: `track-${t.id}`,
       data: states.get(t.id)!.features,
-      layers: t.kind === "front" ? frontLayers(`track-${t.id}`) : movementLayers(`track-${t.id}`),
+      layers: layersFor(t),
     })));
   }, [tracks, on, states, onOverlays]);
 
@@ -204,6 +286,7 @@ export default function TracksPanel({ timelineEnd, onOverlays, onFocus }: Props)
         <>
           {tracks.map((t) => {
             const s = states.get(t.id);
+            const ms = t.kind === "movement" ? (s?.summary as MovementSummary | undefined) : undefined;
             const st = s?.snapshot?.stats;
             const changes = (s?.features.features ?? []).filter((f) => ["gained", "lost"].includes(f.properties?.category));
             const gained = changes.filter((f) => f.properties?.category === "gained").reduce((a, f) => a + (f.properties?.km2 ?? 0), 0);
@@ -214,16 +297,19 @@ export default function TracksPanel({ timelineEnd, onOverlays, onFocus }: Props)
                   <span><b>{t.name}</b><br /><span className="dimmer mono" style={{ fontSize: 10 }}>{t.source}</span></span>
                   <input type="checkbox" checked={on.has(t.id)} onChange={() => setOn((o) => { const n = new Set(o); if (n.has(t.id)) n.delete(t.id); else n.add(t.id); return n; })} />
                 </label>
-                {on.has(t.id) && t.kind === "movement" && s?.summary && (
+                {on.has(t.id) && s && ms && (
                   <div className="tp-stats mono">
-                    {s.summary.latest
-                      ? <div>Last seen <b>{s.summary.latest.place}</b>, {day(s.summary.latest.day)}</div>
+                    {ms.latest
+                      ? <div>Last seen <b>{ms.latest.place}</b>, {day(ms.latest.day)}</div>
                       : <div className="dimmer">No position yet</div>}
-                    <div><i style={{ background: C.path }} />{s.summary.days} days on the map, about {s.summary.km.toLocaleString()} km</div>
-                    {s.summary.people ? <div>Last reported size: ~{s.summary.people.toLocaleString()} people</div> : null}
-                    <div className="dimmer">{s.summary.reports} reports from the news</div>
+                    <div><i style={{ background: C.path }} />{ms.days} days on the map, about {ms.km.toLocaleString()} km</div>
+                    {ms.people ? <div>Last reported size: ~{ms.people.toLocaleString()} people</div> : null}
+                    <div className="dimmer">{ms.reports} reports from the news</div>
                     <Reports state={s} onFocus={onFocus} onChange={() => setRefresh((x) => x + 1)} />
                   </div>
+                )}
+                {on.has(t.id) && t.kind === "strikes" && s?.summary && (
+                  <Strikes state={s} onFocus={onFocus} onChange={() => setRefresh((x) => x + 1)} />
                 )}
                 {on.has(t.id) && t.kind === "front" && s?.snapshot && (
                   <div className="tp-stats mono">
@@ -255,7 +341,7 @@ export default function TracksPanel({ timelineEnd, onOverlays, onFocus }: Props)
               <input type="range" min={range.lo} max={range.hi} step={DAY / 4} value={at.getTime()}
                 onChange={(e) => { setPlaying(false); setPinned(new Date(Number(e.target.value))); }} />
               <div className="tp-row mono">
-                <span className="dimmer">changes over</span>
+                <span className="dimmer" title="Fronts: what changed in this span. Strikes: those reported in it.">over</span>
                 {COMPARE.map((c) => (
                   <button key={c} className={`btn ${compare === c ? "on" : ""}`} onClick={() => setCompare(c)}>{c === 1 ? "1 DAY" : `${c} DAYS`}</button>
                 ))}
@@ -264,6 +350,13 @@ export default function TracksPanel({ timelineEnd, onOverlays, onFocus }: Props)
                 <span><i style={{ background: C.gained }} />taken</span>
                 <span><i style={{ background: C.lost }} />retaken</span>
                 <span><i style={{ background: C.attack }} />attack</span>
+                {tracks.some((t) => t.kind === "strikes" && on.has(t.id)) && (
+                  <>
+                    <span><i style={{ background: STRIKE.hit }} />strike hit</span>
+                    <span><i style={{ background: STRIKE.intercepted }} />intercepted</span>
+                    <span><i style={{ background: STRIKE.explosions_heard }} />explosions</span>
+                  </>
+                )}
               </div>
             </div>
           )}

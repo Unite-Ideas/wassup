@@ -254,7 +254,7 @@ export interface Track {
   id: number;
   key: string;
   name: string;
-  kind: "front" | "movement";
+  kind: "front" | "movement" | "strikes";
   desk: string | null;
   source: string | null;
   description: string | null;
@@ -286,11 +286,22 @@ export interface MovementSummary {
   people: number | null;
 }
 
+export interface StrikeSummary {
+  strikes: number;
+  reports: number;
+  days: number;
+  hits: number;
+  intercepted: number;
+  corroborated: number;
+  killed: number;
+  weapons: Record<string, number>;
+}
+
 export interface TrackState {
-  kind: "front" | "movement";
+  kind: "front" | "movement" | "strikes";
   snapshot: TrackSnapshot | null;
   previous: TrackSnapshot | null;
-  summary?: MovementSummary;
+  summary?: MovementSummary | StrikeSummary;
   features: GeoJSON.FeatureCollection;
 }
 

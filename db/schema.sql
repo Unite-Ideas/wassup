@@ -303,7 +303,7 @@ CREATE TABLE IF NOT EXISTS tracks (
     id              serial PRIMARY KEY,
     key             text UNIQUE NOT NULL,
     name            text NOT NULL,
-    kind            text NOT NULL,                  -- front | movement
+    kind            text NOT NULL,                  -- front | movement | strikes
     desk            text,
     source          text,                           -- where the observations come from
     description     text,
@@ -327,7 +327,7 @@ CREATE TABLE IF NOT EXISTS track_observations (
     track_id        integer NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
     snapshot_id     bigint REFERENCES track_snapshots(id) ON DELETE CASCADE,
     observed_at     timestamptz NOT NULL,
-    category        text NOT NULL,                  -- occupied | contested | liberated | attack | position
+    category        text NOT NULL,                  -- occupied | contested | liberated | attack | position | strike
     geom            geometry(Geometry, 4326) NOT NULL,
     label           text,
     props           jsonb NOT NULL DEFAULT '{}'::jsonb,
@@ -369,6 +369,12 @@ CREATE TABLE IF NOT EXISTS track_reads (
     positions       integer NOT NULL DEFAULT 0,
     read_at         timestamptz NOT NULL DEFAULT now(),
     PRIMARY KEY (track_id, item_id)
+);
+-- Telegram posts already read for strikes (tracks/strikes.py), whether or not they reported any.
+CREATE TABLE IF NOT EXISTS strike_reads (
+    item_id         bigint PRIMARY KEY REFERENCES items(id) ON DELETE CASCADE,
+    strikes         integer NOT NULL DEFAULT 0,
+    read_at         timestamptz NOT NULL DEFAULT now()
 );
 
 -- Social channels (Telegram first). Each has a source row so its posts flow through the

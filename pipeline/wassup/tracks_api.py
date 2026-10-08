@@ -11,6 +11,7 @@ from pydantic import BaseModel
 
 from . import db
 from .tracks.movement import daily_path, km
+from .tracks.strikes import group_strikes
 
 router = APIRouter(prefix="/api/tracks")
 
@@ -43,7 +44,8 @@ def state(track_id: int, at: datetime | None = None, compare_days: float = Query
     """The track as it stood at `at` (default now).
 
     Fronts: the last snapshot at or before `at`, plus what changed hands since the snapshot
-    `compare_days` earlier ("gained" by the occupier, "lost" by it). Movements: every position
+    `compare_days` earlier ("gained" by the occupier, "lost" by it). Strikes: those reported in
+    the `compare_days` up to `at`, reports of the same strike grouped into one. Movements: every position
     reported up to `at`, with the day by day path, reports that disagree with it flagged, and a
     summary (latest place, distance covered, last group size).
     """
@@ -70,6 +72,8 @@ def state(track_id: int, at: datetime | None = None, compare_days: float = Query
                 prev = None
             features = _front_features(snap["id"], prev["id"] if prev else None)
             return {"kind": "front", "snapshot": snap, "previous": prev, "features": features}
+        if t["kind"] == "strikes":
+            return _strikes(conn, track_id, at, compare_days)
         rows = conn.execute(
             """SELECT id, observed_at, category, label, props, source_url, item_id, confidence, status,
                       ST_Y(geom) AS lat, ST_X(geom) AS lon FROM track_observations
@@ -97,6 +101,30 @@ def state(track_id: int, at: datetime | None = None, compare_days: float = Query
                "latest": {"place": next(r["label"] for r in rows if r["id"] == latest["id"]), "day": latest["day"].isoformat()} if latest else None,
                "people": people}
     return {"kind": t["kind"], "snapshot": None, "previous": None, "summary": summary, "features": _fc(feats)}
+
+
+def _strikes(conn, track_id: int, at: datetime, days: float) -> dict:
+    rows = conn.execute(
+        """SELECT o.id, o.observed_at, o.label, o.props, o.source_url, o.status, ST_Y(o.geom) AS lat, ST_X(o.geom) AS lon,
+                  (SELECT count(DISTINCT coalesce(x.outlet, x.source_id::text)) FROM items x
+                   JOIN sources sx ON sx.id = x.source_id AND sx.kind <> 'telegram'
+                   WHERE i.story_id IS NOT NULL AND x.story_id = i.story_id) AS news
+           FROM track_observations o LEFT JOIN items i ON i.id = o.item_id
+           WHERE o.track_id = %s AND o.category = 'strike' AND o.status <> 'rejected'
+             AND o.observed_at > %s AND o.observed_at <= %s""",
+        (track_id, at - timedelta(days=days), at)).fetchall()
+    events = group_strikes(rows, at)
+    feats = [_feature(json.dumps({"type": "Point", "coordinates": [e["lon"], e["lat"]]}),
+                      {"category": "strike", **{k: v for k, v in e.items() if k not in ("lat", "lon")}}) for e in events]
+    weapons: dict[str, int] = {}
+    for e in events:
+        weapons[e["weapon"]] = weapons.get(e["weapon"], 0) + 1
+    summary = {"strikes": len(events), "reports": len(rows), "days": days,
+               "hits": sum(e["outcome"] == "hit" for e in events),
+               "intercepted": sum(e["outcome"] == "intercepted" for e in events),
+               "corroborated": sum(e["corroborated"] for e in events),
+               "killed": sum(e["killed"] or 0 for e in events), "weapons": weapons}
+    return {"kind": "strikes", "snapshot": None, "previous": None, "summary": summary, "features": _fc(feats)}
 
 
 class ObservationIn(BaseModel):

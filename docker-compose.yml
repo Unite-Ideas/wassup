@@ -50,6 +50,8 @@ services:
       READ_CONCURRENCY: ${READ_CONCURRENCY:-32}  # pages downloading at once
       READ_WORKERS: ${READ_WORKERS:-16}          # CPU cores for pulling text out of pages
       TRANSLATE_PARALLEL: ${TRANSLATE_PARALLEL:-3}
+      STRIKES_PARALLEL: ${STRIKES_PARALLEL:-2}      # Telegram posts read for strikes at once (STRIKES=off to stop)
+      STRIKES: ${STRIKES:-on}
       OLLAMA_NUM_CTX: ${OLLAMA_NUM_CTX:-16384}     # the same context size for every model call
       # A separate Telegram account for reading channels in real time (optional; see docs/RUNNING.md)
       TELEGRAM_API_ID: ${TELEGRAM_API_ID:-}

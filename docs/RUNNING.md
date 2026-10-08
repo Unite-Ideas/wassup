@@ -138,6 +138,19 @@ day) or **reject** on a wrong one (it disappears for good). Reports tagged *appr
 from the model's own estimate, *off route* ones disagree with the rest of the path, and
 *undated* ones use the article's date.
 
+The third kind is **strikes**, one track for Ukraine and Russia and one for the Middle East.
+The local model reads every Telegram post that mentions a strike, an explosion, a drone or a
+missile, in any language, and lists each strike it reports: where, when, with what, by whom, what
+was hit, and the sentence that says so. Places are looked up in a list of 76,000 villages and towns
+in their Latin, Cyrillic, Arabic and Hebrew spellings; a village whose name several places share
+is left off unless the post says which province. Reports of the same place within six hours are
+one strike. On the map, orange is a hit, grey intercepted, yellow explosions only; bigger means
+more reports, a white ring means two or more channels or news outlets reported it, and older
+strikes fade. Click one to see who reported it, with links to the posts. Use the 1 DAY, 7 DAYS
+and 30 DAYS buttons to choose the span, and **reject** in the panel to hide a wrong one for good.
+It reads only Telegram posts from the last 36 hours, two at a time (`STRIKES_PARALLEL` in `.env`;
+`STRIKES=off` to stop it).
+
 ## Telegram channels and the SOURCES tab
 
 Wassup reads public Telegram channels from their web previews (no account, no login). It starts

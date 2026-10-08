@@ -24,6 +24,7 @@ from .social.scout import run_scout
 from .social.telegram import TelegramCollector
 from .tracks.deepstate import DeepStateCollector
 from .tracks.movement import run_movements
+from .tracks.strikes import run_strikes
 from .translate import run_translate
 from .triage import run_triage
 
@@ -59,6 +60,7 @@ LANES: list[tuple[str, list[tuple[str, float, Callable]]]] = [
     ("locate", [("locate", 120, run_locate)]),
     ("newsroom", [("newsroom", 60, run_manager)]),
     ("movements", [("movements", 300, run_movements)]),
+    ("strikes", [("strikes", 30, run_strikes)]),
     ("upkeep", [("retention", 6 * 3600, run_retention), ("scout", 3600, run_scout)]),
 ]
 STEPS = [step for _, steps in LANES for step in steps]

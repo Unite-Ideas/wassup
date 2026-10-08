@@ -264,7 +264,12 @@ Phase 0 implementation notes:
 - **Sources:** DeepStateMap for Ukraine (`pipeline/wassup/tracks/deepstate.py`), and migrant
   caravans read from the news by the local model (`pipeline/wassup/tracks/movement.py`), placed
   with GDELT's tags, known places and a list of towns along the routes (`data/towns.tsv`), the
-  route cleaned day by day. Next: GDELT and ACLED events, and photos placed on the map.
+  route cleaned day by day. Strikes read from Telegram posts by the local model
+  (`pipeline/wassup/tracks/strikes.py`, its own lane), placed with GeoNames villages and towns in
+  every script (`data/conflict_places.tsv.gz`, built by `scripts/build_conflict_places.py`),
+  never with coordinates the model guesses; `strike_reads` records posts already read. Reports
+  are grouped into strikes when the state is asked for, with the number of channels, sides and
+  independent news outlets behind each. Next: GDELT and ACLED events, and photos placed on the map.
 
 ## Social channels
 

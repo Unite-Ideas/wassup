@@ -140,6 +140,39 @@ function arrowIcon(): ImageData {
   return g.getImageData(0, 0, size, size);
 }
 
+const WEAPON: Record<string, string> = { missile: "missile", drone: "drone", glide_bomb: "glide bomb", airstrike: "air strike",
+  artillery: "artillery", rocket: "rocket", unknown: "strike" };
+const OUTCOME: Record<string, string> = { hit: "hit", intercepted: "intercepted", claimed: "claimed, not shown", explosions_heard: "explosions heard" };
+
+/** What a strike on the map was, who reported it and where to read it. Built from DOM nodes,
+ *  never HTML, because the text comes from Telegram posts. */
+function strikeCard(raw: Record<string, unknown>): HTMLElement {
+  // The map flattens lists and objects in feature properties to JSON strings.
+  const p = Object.fromEntries(Object.entries(raw).map(([k, v]) => {
+    if (typeof v === "string" && (v.startsWith("[") || v.startsWith("{"))) { try { return [k, JSON.parse(v)]; } catch { /* plain text */ } }
+    return [k, v];
+  })) as Record<string, any>;
+  const el = (tag: string, cls: string, text?: string) => { const e = document.createElement(tag); e.className = cls; if (text) e.textContent = text; return e; };
+  const root = el("div", "strike-card");
+  const when = new Date(p.first).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  const province = p.admin1 && !String(p.admin1).startsWith(String(p.label).slice(0, 5)) ? `, ${p.admin1}` : "";
+  root.append(el("div", "sc-title", `${p.label}${province}`));
+  root.append(el("div", "sc-meta", [when, WEAPON[p.weapon] ?? p.weapon, OUTCOME[p.outcome] ?? p.outcome, p.attacker ? `by ${p.attacker}` : ""].filter(Boolean).join(" · ")));
+  const toll = [p.target, p.killed ? `${p.killed} killed` : "", p.injured ? `${p.injured} injured` : ""].filter(Boolean).join(" · ");
+  if (toll) root.append(el("div", "sc-meta", toll));
+  const sides = (p.sides ?? []).length > 1 ? `, both sides (${p.sides.join(", ")})` : "";
+  root.append(el("div", p.corroborated ? "sc-ok" : "sc-warn",
+    `${p.channels} channel${p.channels === 1 ? "" : "s"}${sides}${p.news ? `, ${p.news} news outlets` : ""}${p.corroborated ? "" : ": unconfirmed"}`));
+  for (const s of (p.sources ?? []) as { handle: string; url: string; quote: string }[]) {
+    const row = el("div", "sc-source");
+    const a = document.createElement("a");
+    a.href = s.url; a.target = "_blank"; a.rel = "noreferrer noopener"; a.textContent = `@${s.handle}`;
+    row.append(a, el("span", "sc-quote", ` ${s.quote ?? ""}`));
+    root.append(row);
+  }
+  return root;
+}
+
 export default function MapView({ data, desks, selection, storyDetail, visible, overlays, onSelectStory, onMapClick, focus }: Props) {
   const box = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
@@ -181,7 +214,15 @@ export default function MapView({ data, desks, selection, storyDetail, visible, 
         latest.current.onSelectStory(Number(hit.properties.id));
         return;
       }
-      latest.current.onMapClick?.([e.lngLat.lng, e.lngLat.lat], m.queryRenderedFeatures(e.point));
+      const all = m.queryRenderedFeatures(e.point);
+      const strike = all.find((f) => f.properties?.category === "strike");
+      if (strike) {
+        new maplibregl.Popup({ className: "map-popup strike-popup", offset: 8, maxWidth: "320px" })
+          .setLngLat((strike.geometry as GeoJSON.Point).coordinates as [number, number])
+          .setDOMContent(strikeCard(strike.properties)).addTo(m);
+        return;
+      }
+      latest.current.onMapClick?.([e.lngLat.lng, e.lngLat.lat], all);
     });
     map.current = m;
     if (new URLSearchParams(location.search).has("debug")) (window as unknown as { wassupMap: maplibregl.Map }).wassupMap = m;
