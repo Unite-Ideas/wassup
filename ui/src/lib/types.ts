@@ -1,4 +1,4 @@
-export type View = "globe" | "map" | "board" | "newsroom";
+export type View = "globe" | "map" | "board" | "newsroom" | "sources";
 
 export type Tier = "A" | "B" | "C" | "S" | "U";
 
@@ -87,7 +87,7 @@ export interface Item {
   tier: Tier;
   state_media: boolean;
   source_kind: string;
-  meta: { themes?: string[]; tone?: number; feed?: string; kind?: string };
+  meta: { themes?: string[]; tone?: number; feed?: string; kind?: string; platform?: string; lean?: string | null; views?: number | null };
   excerpt?: string | null;
   has_text?: boolean | null;
   lead_image?: string | null;
@@ -292,4 +292,27 @@ export interface TrackState {
   previous: TrackSnapshot | null;
   summary?: MovementSummary;
   features: GeoJSON.FeatureCollection;
+}
+
+export interface SocialAccount {
+  id: number;
+  platform: string;
+  handle: string;
+  name: string | null;
+  status: "following" | "candidate" | "paused" | "removed";
+  pinned: boolean;
+  banned: boolean;
+  added_by: "seed" | "you" | "discovered";
+  discovered_from: string | null;
+  desk: string | null;
+  kind: string | null;
+  lean: string | null;
+  subscribers: number | null;
+  score: number | null;
+  stats: { posts?: number; routed?: number; forwarded?: number; corroborated?: number; evaluable?: number; early?: number; median_lead_min?: number | null };
+  status_reason: string | null;
+  status_changed_at: string;
+  last_checked_at: string | null;
+  last_error: string | null;
+  last_post_at: string | null;
 }

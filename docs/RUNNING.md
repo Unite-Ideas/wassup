@@ -138,6 +138,23 @@ day) or **reject** on a wrong one (it disappears for good). Reports tagged *appr
 from the model's own estimate, *off route* ones disagree with the rest of the path, and
 *undated* ones use the article's date.
 
+## Telegram channels and the SOURCES tab
+
+Wassup reads public Telegram channels from their web previews (no account, no login). It starts
+with the channels in `config/social.yaml`, about 25 for the Ukraine and Middle East desks, and
+posts flow into stories like articles. The **SOURCES** tab lists every channel with its score:
+
+- **confirmed**: share of its posts that two or more independent outlets also reported within 48 hours
+- **early**: how many of those it posted at least 10 minutes before the first outlet, and the median lead
+- **relevant**: share of its posts on stories your desks track
+
+Every hour the scout re-scores the channels. Channels that the followed ones keep forwarding or
+linking to become **candidates**, are watched for a week, then followed if they score well or
+dropped if not. Followed channels that score badly for long are paused, then removed. **Pin**
+keeps a channel whatever its score, **ban** removes it for good, and you can follow any channel
+by typing its name. Scores mean little for the first two days, until posts are old enough to
+judge.
+
 ## Tuning what you see
 
 Everything you are likely to change lives in `config/` and is mounted into the container, so edits apply on restart (`docker compose restart app`), followed by `wassup retriage` for desk or interest changes.

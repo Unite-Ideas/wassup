@@ -370,3 +370,43 @@ CREATE TABLE IF NOT EXISTS track_reads (
     read_at         timestamptz NOT NULL DEFAULT now(),
     PRIMARY KEY (track_id, item_id)
 );
+
+-- Social channels (Telegram first). Each has a source row so its posts flow through the
+-- pipeline like articles; the scout (social/scout.py) scores, discovers, promotes and drops them.
+CREATE TABLE IF NOT EXISTS social_accounts (
+    id              serial PRIMARY KEY,
+    platform        text NOT NULL,                  -- telegram
+    handle          text NOT NULL,
+    name            text,
+    status          text NOT NULL DEFAULT 'candidate', -- following | candidate | paused | removed
+    pinned          boolean NOT NULL DEFAULT false,  -- you want it followed whatever its score
+    banned          boolean NOT NULL DEFAULT false,  -- you never want it
+    added_by        text NOT NULL DEFAULT 'discovered', -- seed | you | discovered
+    discovered_from text,
+    desk            text,
+    kind            text,                           -- news | osint | official | milblogger | state
+    lean            text,
+    subscribers     integer,
+    source_id       integer REFERENCES sources(id),
+    last_post_id    bigint NOT NULL DEFAULT 0,
+    last_checked_at timestamptz,
+    next_check_at   timestamptz NOT NULL DEFAULT now(),
+    last_error      text,
+    score           real,
+    stats           jsonb NOT NULL DEFAULT '{}'::jsonb,
+    status_reason   text,
+    status_changed_at timestamptz NOT NULL DEFAULT now(),
+    created_at      timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (platform, handle)
+);
+CREATE INDEX IF NOT EXISTS social_accounts_due_idx ON social_accounts (next_check_at) WHERE status IN ('following', 'candidate');
+-- Channels that followed channels forward or link to: where new candidates come from.
+CREATE TABLE IF NOT EXISTS social_mentions (
+    platform        text NOT NULL,
+    handle          text NOT NULL,
+    from_account    integer NOT NULL REFERENCES social_accounts(id) ON DELETE CASCADE,
+    kind            text NOT NULL,                  -- forward | link
+    n               integer NOT NULL DEFAULT 1,
+    last_seen       timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (platform, handle, from_account, kind)
+);

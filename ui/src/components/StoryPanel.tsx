@@ -60,6 +60,7 @@ function ItemRow({ it }: { it: Item & { copies: number } }) {
       <div className="item-head">
         <span className={`tier tier-${it.tier}`} title={TIER_LABEL[it.tier]}>{it.tier}</span>
         <span className="outlet">{it.outlet}</span>
+        {it.meta?.platform === "telegram" && <span className="chip" title={it.meta.lean ? `Speaks for the ${it.meta.lean} side` : "Telegram channel"}>Telegram{it.meta.lean ? ` · ${it.meta.lean} side` : ""}</span>}
         {it.state_media && <span className="chip state">State media</span>}
         {it.language && it.language !== "en" && <span className="chip">{languageName(it.language)}</span>}
         <span>{ago(it.published_at)}</span>

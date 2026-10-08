@@ -1,4 +1,4 @@
-import type { Brief, PlaceHit, Desk, Filters, GlobeData, GraphData, NewsroomAgent, NewsroomEvent, NewsroomStatus, PlaceDetail, Stats, Story, StoryDetail, TimelineData, Track, TrackState } from "./types";
+import type { Brief, PlaceHit, Desk, Filters, GlobeData, GraphData, NewsroomAgent, NewsroomEvent, NewsroomStatus, PlaceDetail, Stats, Story, SocialAccount, StoryDetail, TimelineData, Track, TrackState } from "./types";
 
 async function get<T>(path: string, params?: Record<string, string | number | boolean | undefined>): Promise<T> {
   const qs = new URLSearchParams();
@@ -23,6 +23,15 @@ export const api = {
   graph: (id: number, depth = 2) => get<GraphData>(`/graph/${id}`, { depth, max_nodes: 70 }),
   timeline: (p: { since: string; until: string; desks?: string; cold: boolean; buckets: number }) => get<TimelineData>("/timeline", p),
   itemText: (id: number) => get<{ status: string; body: string | null; lead_image: string | null; images: { src: string; caption: string }[] }>(`/items/${id}/text`),
+  socialAccounts: () => get<SocialAccount[]>("/social/accounts"),
+  socialAdd: async (handle: string, desk?: string) => {
+    const res = await fetch("/api/social/accounts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ handle, desk }) });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail ?? `could not add: ${res.status}`);
+  },
+  socialAct: async (id: number, action: string) => {
+    const res = await fetch(`/api/social/accounts/${id}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action }) });
+    if (!res.ok) throw new Error(`could not ${action}: ${res.status}`);
+  },
   tracks: () => get<Track[]>("/tracks"),
   trackState: (id: number, at: Date, compareDays: number) => get<TrackState>(`/tracks/${id}/state`, { at: at.toISOString(), compare_days: compareDays }),
   setObservation: async (id: number, status: "confirmed" | "rejected" | "auto") => {

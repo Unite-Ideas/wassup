@@ -266,3 +266,14 @@ Phase 0 implementation notes:
   with GDELT's tags, known places and a list of towns along the routes (`data/towns.tsv`), the
   route cleaned day by day. Next: GDELT and ACLED events, and photos placed on the map.
 
+## Social channels
+
+- **Telegram** (`pipeline/wassup/social/telegram.py`): public channels read from t.me/s pages
+  every 15 minutes (candidates every 2 hours). Posts become items with their text as full text;
+  forwards and t.me links are recorded in `social_mentions`.
+- **Scout** (`pipeline/wassup/social/scout.py`): hourly. Scores each channel on 30 days of posts
+  against independent (non social) coverage of the same stories: corroboration, earliness (with
+  median lead time), relevance and originality, smoothed so small samples do not dominate.
+  Discovers candidates from forwards and links, promotes, pauses and removes channels; your pins
+  and bans always win. Thresholds are in `config/social.yaml`.
+

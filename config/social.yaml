@@ -1,0 +1,43 @@
+# Social channels Wassup follows. Seeds are a starting point: the scout scores every channel
+# on how early and how reliably it breaks news, discovers new channels that followed ones keep
+# forwarding or linking to, and promotes or drops channels by itself. Change a channel by hand
+# in the SOURCES tab (pin to keep it, ban to never see it again).
+#
+# kind:  news | osint | official (government or military) | milblogger | state (state media)
+# lean:  which side a channel speaks for, shown next to its posts. Not a judgement of accuracy:
+#        the scores are.
+
+telegram:
+  check_minutes: 15          # how often a followed channel is checked
+  candidate_check_minutes: 120
+  max_following: 300
+  max_candidates: 150
+  seeds:
+    russia_ukraine:
+      - {handle: DeepStateUA, kind: osint, lean: Ukraine}
+      - {handle: operativnoZSU, kind: news, lean: Ukraine}
+      - {handle: GeneralStaffZSU, kind: official, lean: Ukraine}
+      - {handle: kpszsu, kind: official, lean: Ukraine}
+      - {handle: V_Zelenskiy_official, kind: official, lean: Ukraine}
+      - {handle: ukrpravda_news, kind: news, lean: Ukraine}
+      - {handle: insiderUKR, kind: news, lean: Ukraine}
+      - {handle: UkraineNow, kind: news, lean: Ukraine}
+      - {handle: truexanewsua, kind: news, lean: Ukraine}
+      - {handle: nexta_live, kind: news}
+      - {handle: rybar, kind: milblogger, lean: Russia}
+      - {handle: wargonzo, kind: milblogger, lean: Russia}
+      - {handle: intelslava, kind: milblogger, lean: Russia}
+      - {handle: Slavyangrad, kind: milblogger, lean: Russia}
+      - {handle: militarysummary, kind: osint}
+      - {handle: mod_russia_en, kind: state, lean: Russia}
+      - {handle: mod_russia, kind: state, lean: Russia}
+      - {handle: rian_ru, kind: state, lean: Russia}
+      - {handle: tass_agency, kind: state, lean: Russia}
+    iran_mideast:
+      - {handle: idfofficial, kind: official, lean: Israel}
+      - {handle: englishabuali, kind: osint, lean: Israel}
+      - {handle: QudsN, kind: news, lean: Palestine}
+      - {handle: presstv, kind: state, lean: Iran}
+      - {handle: farsna, kind: state, lean: Iran}
+      - {handle: warmonitors, kind: osint}
+      - {handle: ClashReport, kind: osint}

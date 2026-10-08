@@ -20,6 +20,8 @@ from .newsroom.manager import run_manager
 from .reader import run_reader
 from .retention import run_retention
 from .signals import update_breaking, update_links
+from .social.scout import run_scout
+from .social.telegram import TelegramCollector
 from .tracks.deepstate import DeepStateCollector
 from .tracks.movement import run_movements
 from .translate import run_translate
@@ -29,7 +31,8 @@ log = logging.getLogger(__name__)
 
 
 def all_collectors() -> list[Collector]:
-    return [GdeltCollector(), RssCollector(), CongressCollector(), FederalRegisterCollector(), DeepStateCollector()]
+    return [GdeltCollector(), RssCollector(), CongressCollector(), FederalRegisterCollector(), DeepStateCollector(),
+            TelegramCollector()]
 
 
 def _collector_loop(c: Collector, stop: threading.Event) -> None:
@@ -56,7 +59,7 @@ LANES: list[tuple[str, list[tuple[str, float, Callable]]]] = [
     ("locate", [("locate", 120, run_locate)]),
     ("newsroom", [("newsroom", 60, run_manager)]),
     ("movements", [("movements", 300, run_movements)]),
-    ("upkeep", [("retention", 6 * 3600, run_retention)]),
+    ("upkeep", [("retention", 6 * 3600, run_retention), ("scout", 3600, run_scout)]),
 ]
 STEPS = [step for _, steps in LANES for step in steps]
 
