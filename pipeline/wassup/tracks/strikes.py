@@ -74,7 +74,8 @@ COORDS = re.compile(r"(?<![\d.])(-?\d{1,2}\.\d{3,})\s*[,;]\s*(-?\d{1,3}\.\d{3,})
 # on the province's main city and marked as only roughly placed.
 PROVINCE_ONLY = re.compile(r"щин[аиіуо]|\b(oblast|region|province|governorate|krai|област|облас|край|محافظة)", re.I)
 _PLACE_WORDS = {"village", "town", "city", "of", "the", "settlement", "district", "село", "селище", "місто", "город",
-                "поселок", "посёлок", "смт", "пгт", "м", "с", "г", "п", "selo", "smt", "al"}
+                "поселок", "посёлок", "смт", "пгт", "м", "с", "г", "п", "selo", "smt", "al",
+                "region", "oblast", "province", "governorate", "krai", "область", "области", "обл"}
 
 
 def unorm(s: str | None) -> str:

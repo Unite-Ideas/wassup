@@ -22,6 +22,7 @@ def test_geocode_villages_in_any_spelling_and_refuses_to_guess():
     # Dozens of villages are called Novoselivka: without a province that tells them apart, no point.
     assert geocode("Novoselivka", None, "", "Ukraine") is None
     assert geocode("Atlantis", None, "", "") is None
+    assert geocode("Bryansk region", "Брянской области", "Bryansk Oblast", "Belarus")["country"] == "RU"  # a wrong country is ignored
 
 
 def test_quote_must_come_from_the_post_and_name_the_place():
