@@ -379,7 +379,9 @@ def step_analyze(conn, inv: dict, llm, until: float, parallel: int = 2) -> int:
         for src, out in ex.map(ask, jobs):
             if out is None:
                 continue
-            relevant = bool(out.get("relevant")) and out.get("account") != "unrelated"
+            # Left out only when both answers say so: a model that calls a source someone's own
+            # reporting but "not relevant" contradicts itself, and hiding evidence is the worse mistake.
+            relevant = bool(out.get("relevant")) or out.get("account") != "unrelated"
             conn.execute("UPDATE investigation_sources SET analysis = %s, status = %s WHERE id = %s",
                          (Jsonb(out), "analyzed" if relevant else "unrelated", src["id"]))
             if relevant and src["depth"] < MAX_DEPTH:

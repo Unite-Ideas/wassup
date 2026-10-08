@@ -81,6 +81,8 @@ class FakeLLM:
         if "Write web search queries" in prompt:
             return {"queries": [{"query": "pastor ministry trips allegations", "language": "en"}]}
         relevant = "unrelated weather" not in prompt
+        if "contradicts itself" in prompt:  # says it is reporting on the story, and also not relevant
+            return {**self(prompt.replace("contradicts itself", ""), schema), "relevant": False, "account": "original_reporting"}
         return {"relevant": relevant, "account": "secondhand" if relevant else "unrelated",
                 "summary": "Reports the board's support for the pastor.", "relies_on": ["Example Report"],
                 "evidence": [], "people": [], "claims": [], "responses": [],
@@ -102,6 +104,9 @@ def test_investigation_from_links_to_summary(monkeypatch):
     def fake_fetch(url, client=None):
         if url in pages and pages[url][1]:
             return parse_article(url, pages[url][1])
+        if url == "https://mixed.example/post":
+            return {"kind": "article", "url": url, "title": "Mixed", "text": "contradicts itself " * 30, "published_at": None,
+                    "author": None, "outlet": "Mixed", "thumbnail": None, "links": []}
         if url == "https://weather.example/today":
             return {"kind": "article", "url": url, "title": "Sunny", "text": "unrelated weather " * 40, "published_at": None,
                     "author": None, "outlet": "Weather", "thumbnail": None, "links": []}
@@ -113,7 +118,7 @@ def test_investigation_from_links_to_summary(monkeypatch):
     client = TestClient(app)
     inv = client.post("/api/investigations", json={
         "title": "Pastor allegations", "brief": "What evidence exists?",
-        "links": "https://news.example.com/2026/09/30/board-backs-pastor/?utm_source=x\nhttps://weather.example/today"}).json()["id"]
+        "links": "https://news.example.com/2026/09/30/board-backs-pastor/?utm_source=x\nhttps://weather.example/today\nhttps://mixed.example/post"}).json()["id"]
     llm = FakeLLM()
     with db.connect() as conn:
         for _ in range(4):
@@ -124,13 +129,14 @@ def test_investigation_from_links_to_summary(monkeypatch):
     article = by_url["https://news.example.com/2026/09/30/board-backs-pastor/"]
     assert article["status"] == "analyzed" and article["found_by"] == "you"
     assert by_url["https://weather.example/today"]["status"] == "unrelated"
+    assert by_url["https://mixed.example/post"]["status"] == "analyzed"  # a contradictory answer keeps the source
     # The two links the article relies on were followed; the out of range number was ignored.
     traced = [s for s in d["sources"] if s["found_by"] == "traced"]
     assert {s["url"] for s in traced} == {"https://report.example/exclusive-pastor-documents", "https://files.example/letter.pdf"}
     assert all(s["parent_id"] == article["id"] and s["depth"] == 1 for s in traced)
     assert next(s for s in traced if s["url"].endswith(".pdf"))["kind"] == "document"
     assert all(s["status"] == "failed" for s in traced)  # unreachable here, and shown as such
-    assert d["summary"]["headline"] and d["summary"]["source_ids"]["1"] == article["id"]
+    assert d["summary"]["headline"] and article["id"] in d["summary"]["source_ids"].values()
     # Pasting the text of a source replaces what could be read and sends it back to the model.
     r = client.post(f"/api/investigations/{inv}/text", json={"url": "https://report.example/exclusive-pastor-documents",
                                                             "text": "The full report text, pasted by hand. " * 10, "author": "Example Report"})
