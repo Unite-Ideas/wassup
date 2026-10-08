@@ -19,6 +19,7 @@ function Row({ a, desks, onAct }: { a: SocialAccount; desks: Map<string, Desk>; 
           <a href={`https://t.me/${a.handle}`} target="_blank" rel="noreferrer noopener">{a.name ?? a.handle}</a>
           <span className="dimmer mono"> @{a.handle}</span>
           {a.pinned && <span className="chip">pinned</span>}
+          {a.via === "api" && <span className="chip live" title="Read through the logged in Telegram account: posts arrive as they are published">live</span>}
           {a.kind && <span className={`chip ${a.kind === "state" ? "state" : ""}`}>{a.kind === "state" ? "state media" : a.kind}</span>}
           {a.lean && <span className="chip">{a.lean} side</span>}
           {a.desk && <span className="chip" style={{ color: deskColor(desks, a.desk), borderColor: deskColor(desks, a.desk) }}>{desks.get(a.desk)?.name ?? a.desk}</span>}

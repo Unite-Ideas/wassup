@@ -12,6 +12,8 @@
   wassup newsroom setup       create or update the newsroom in Paperclip: editor, desks, routines
   wassup newsroom status      show the newsroom's agents
   wassup newsroom standup     call a standup now
+  wassup telegram login       log the Telegram account in, once (keys in .env)
+  wassup telegram status      show whether the Telegram account is logged in
   wassup api                  serve the API and the built UI on http://localhost:8000
   wassup dev                  pipeline and API together in one process
 """
@@ -90,6 +92,18 @@ def main() -> None:
 
         with db.connect() as conn:
             print(f"{rebuild_stories(conn)} items queued; `wassup run` will re-cluster them")
+    elif a.command == "telegram":
+        from .social import telegram_live
+
+        if a.name == "login":
+            telegram_live.login()
+        elif a.name == "status":
+            if telegram_live._creds() is None:
+                print("No Telegram keys: set TELEGRAM_API_ID, TELEGRAM_API_HASH and TELEGRAM_PHONE in .env")
+            else:
+                print("Logged in." if telegram_live.live_available() else "Keys set, not logged in: run `wassup telegram login`")
+        else:
+            p.error("telegram takes login or status")
     elif a.command == "newsroom":
         from .newsroom import manager, setup as nsetup, store as nstore
 

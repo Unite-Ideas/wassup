@@ -315,4 +315,5 @@ export interface SocialAccount {
   last_checked_at: string | null;
   last_error: string | null;
   last_post_at: string | null;
+  via?: "web" | "api";
 }

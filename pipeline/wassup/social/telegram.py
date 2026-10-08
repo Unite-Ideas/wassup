@@ -143,7 +143,8 @@ class TelegramCollector(Collector):
             self._seeded = True
         due = conn.execute(
             """SELECT * FROM social_accounts WHERE platform = 'telegram' AND status IN ('following', 'candidate')
-               AND NOT banned AND next_check_at <= now() ORDER BY (status = 'following') DESC, next_check_at LIMIT 40""").fetchall()
+               AND NOT banned AND via = 'web' AND next_check_at <= now()
+               ORDER BY (status = 'following') DESC, next_check_at LIMIT 40""").fetchall()
         conn.commit()
         if not due:
             return 0
@@ -158,9 +159,19 @@ class TelegramCollector(Collector):
                              "last_error = %s WHERE id = %s", (minutes * 2, f"{type(page).__name__}: {page}"[:300], acct["id"]))
                 conn.commit()
                 continue
-            if not page["posts"] and acct["last_checked_at"] is None and acct["status"] == "candidate":
-                conn.execute("UPDATE social_accounts SET status = 'removed', status_reason = 'No public posts (private, empty or preview turned off).', "
-                             "status_changed_at = now(), last_checked_at = now() WHERE id = %s", (acct["id"],))
+            if not page["posts"] and acct["last_checked_at"] is None:
+                # No public page. With a logged in account it can still be read; without one a
+                # candidate is dropped and a followed channel says why it shows nothing.
+                from .telegram_live import live_available
+                if live_available():
+                    conn.execute("UPDATE social_accounts SET via = 'api', last_checked_at = now(), "
+                                 "status_reason = coalesce(status_reason, 'No public page; read through the logged in account.') WHERE id = %s", (acct["id"],))
+                elif acct["status"] == "candidate":
+                    conn.execute("UPDATE social_accounts SET status = 'removed', status_reason = 'No public posts (private, empty or preview turned off).', "
+                                 "status_changed_at = now(), last_checked_at = now() WHERE id = %s", (acct["id"],))
+                else:
+                    conn.execute("UPDATE social_accounts SET last_checked_at = now(), next_check_at = now() + interval '1 day', "
+                                 "last_error = 'No public page. Log in a Telegram account (wassup telegram login) to read it.' WHERE id = %s", (acct["id"],))
                 conn.commit()
                 continue
             total += self._store(conn, acct, page)
@@ -181,44 +192,49 @@ class TelegramCollector(Collector):
             return e
 
     def _store(self, conn: psycopg.Connection, acct: dict, page: dict) -> int:
-        cutoff = datetime.now(timezone.utc) - timedelta(hours=48)
-        new = [p for p in page["posts"] if p["id"] > acct["last_post_id"] and p["at"] > cutoff]
-        state = acct["kind"] == "state"
-        src = ensure_source(conn, f"telegram:{acct['handle']}", page["name"] or acct["handle"], "telegram",
-                            PAGE.format(handle=acct["handle"]), None, None, "S" if state else "U", state)
-        if acct["source_id"] != src:
-            conn.execute("UPDATE social_accounts SET source_id = %s WHERE id = %s", (src, acct["id"]))
-        # Forwards and links are counted even for old posts: they are how channels are found.
-        for p in page["posts"]:
-            for h, kind in [(p["forwarded_from"], "forward")] + [(h, "link") for h in p["links"]]:
-                if h and h != acct["handle"].lower():
-                    conn.execute(
-                        """INSERT INTO social_mentions (platform, handle, from_account, kind) VALUES ('telegram', %s, %s, %s)
-                           ON CONFLICT (platform, handle, from_account, kind) DO UPDATE SET n = social_mentions.n + 1, last_seen = now()""",
-                        (h, acct["id"], kind))
-        items, bodies, media = [], {}, {}
-        g = gazetteer()
-        for p in new:
-            text = p["text"]
-            if len(text) < 20:
-                continue  # a photo or a sticker with no words
-            url = f"https://t.me/{acct['handle']}/{p['id']}"
-            items.append(RawItem(
-                url=url, title=_title(text), summary=text[:1200], published_at=p["at"],
-                language=detect_language(text), outlet=page["name"] or acct["handle"],
-                outlet_tier="S" if state else "U", outlet_state=state, places=g.find(text),
-                meta={"platform": "telegram", "handle": acct["handle"], "post_id": p["id"], "views": p["views"],
-                      "forwarded_from": p["forwarded_from"] or p["forwarded_name"], "media": p["media"],
-                      "kind": acct["kind"], "lean": acct["lean"], "candidate": acct["status"] == "candidate"}))
-            bodies[url] = text
-            media[url] = p["media"]
-        if not items:
-            return 0
-        n = store_items(conn, src, items)
-        # The post is the whole article: keep it as the full text so the reader does not fetch it.
-        with conn.cursor() as cur:
-            cur.executemany(
-                """INSERT INTO item_texts (item_id, status, body, chars, images)
-                   SELECT id, 'ok', %s, %s, %s FROM items WHERE url = %s ON CONFLICT (item_id) DO NOTHING""",
-                [(b, len(b), Jsonb([{"src": m, "caption": ""} for m in media[u]]), u) for u, b in bodies.items()])
-        return n
+        return store_posts(conn, acct, page)
+
+
+def store_posts(conn: psycopg.Connection, acct: dict, page: dict) -> int:
+    """Save a channel's new posts as items (shared by the web page reader and the logged in one)."""
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=48)
+    new = [p for p in page["posts"] if p["id"] > acct["last_post_id"] and p["at"] > cutoff]
+    state = acct["kind"] == "state"
+    src = ensure_source(conn, f"telegram:{acct['handle']}", page["name"] or acct["handle"], "telegram",
+                        PAGE.format(handle=acct["handle"]), None, None, "S" if state else "U", state)
+    if acct["source_id"] != src:
+        conn.execute("UPDATE social_accounts SET source_id = %s WHERE id = %s", (src, acct["id"]))
+    # Forwards and links are counted even for old posts: they are how channels are found.
+    for p in page["posts"]:
+        for h, kind in [(p["forwarded_from"], "forward")] + [(h, "link") for h in p["links"]]:
+            if h and h != acct["handle"].lower():
+                conn.execute(
+                    """INSERT INTO social_mentions (platform, handle, from_account, kind) VALUES ('telegram', %s, %s, %s)
+                       ON CONFLICT (platform, handle, from_account, kind) DO UPDATE SET n = social_mentions.n + 1, last_seen = now()""",
+                    (h, acct["id"], kind))
+    items, bodies, media = [], {}, {}
+    g = gazetteer()
+    for p in new:
+        text = p["text"]
+        if len(text) < 20:
+            continue  # a photo or a sticker with no words
+        url = f"https://t.me/{acct['handle']}/{p['id']}"
+        items.append(RawItem(
+            url=url, title=_title(text), summary=text[:1200], published_at=p["at"],
+            language=detect_language(text), outlet=page["name"] or acct["handle"],
+            outlet_tier="S" if state else "U", outlet_state=state, places=g.find(text),
+            meta={"platform": "telegram", "handle": acct["handle"], "post_id": p["id"], "views": p["views"],
+                  "forwarded_from": p["forwarded_from"] or p["forwarded_name"], "media": p["media"],
+                  "kind": acct["kind"], "lean": acct["lean"], "candidate": acct["status"] == "candidate"}))
+        bodies[url] = text
+        media[url] = p["media"]
+    if not items:
+        return 0
+    n = store_items(conn, src, items)
+    # The post is the whole article: keep it as the full text so the reader does not fetch it.
+    with conn.cursor() as cur:
+        cur.executemany(
+            """INSERT INTO item_texts (item_id, status, body, chars, images)
+               SELECT id, 'ok', %s, %s, %s FROM items WHERE url = %s ON CONFLICT (item_id) DO NOTHING""",
+            [(b, len(b), Jsonb([{"src": m, "caption": ""} for m in media[u]]), u) for u, b in bodies.items()])
+    return n

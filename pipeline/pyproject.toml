@@ -15,6 +15,7 @@ dependencies = [
     "langdetect>=1.0.9",
     "pmtiles>=3.4",
     "trafilatura>=2.0",
+    "telethon>=1.36",
 ]
 
 [project.optional-dependencies]

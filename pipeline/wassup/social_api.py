@@ -16,7 +16,7 @@ def accounts() -> list[dict]:
         return conn.execute(
             """SELECT a.id, a.platform, a.handle, a.name, a.status, a.pinned, a.banned, a.added_by, a.discovered_from,
                       a.desk, a.kind, a.lean, a.subscribers, a.score, a.stats, a.status_reason, a.status_changed_at,
-                      a.last_checked_at, a.last_error, a.created_at,
+                      a.last_checked_at, a.last_error, a.created_at, a.via,
                       (SELECT max(i.published_at) FROM items i WHERE i.source_id = a.source_id) AS last_post_at
                FROM social_accounts a ORDER BY (a.status = 'following') DESC, (a.status = 'candidate') DESC,
                       a.score DESC NULLS LAST, a.handle""").fetchall()

@@ -99,6 +99,9 @@ def run_forever(collectors: list[Collector] | None = None) -> None:
         threading.Thread(target=_collector_loop, args=(c, stop), name=f"collect-{c.key}", daemon=True).start()
     for lane, steps in LANES:
         threading.Thread(target=_lane_loop, args=(steps, stop), name=f"lane-{lane}", daemon=True).start()
+    from .social.telegram_live import start_live
+
+    start_live()  # posts the moment they are published, when a Telegram account is logged in
     try:
         while not stop.wait(3600):
             pass

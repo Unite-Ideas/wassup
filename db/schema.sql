@@ -410,3 +410,8 @@ CREATE TABLE IF NOT EXISTS social_mentions (
     last_seen       timestamptz NOT NULL DEFAULT now(),
     PRIMARY KEY (platform, handle, from_account, kind)
 );
+-- Channels read through a logged in Telegram account (social/telegram_live.py) rather than
+-- their web page: real time, and channels with no public page.
+ALTER TABLE social_accounts ADD COLUMN IF NOT EXISTS via text NOT NULL DEFAULT 'web';   -- web | api
+ALTER TABLE social_accounts ADD COLUMN IF NOT EXISTS tg_id bigint;
+CREATE INDEX IF NOT EXISTS social_accounts_tg_idx ON social_accounts (tg_id) WHERE tg_id IS NOT NULL;

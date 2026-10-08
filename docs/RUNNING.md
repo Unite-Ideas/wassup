@@ -155,6 +155,21 @@ keeps a channel whatever its score, **ban** removes it for good, and you can fol
 by typing its name. Scores mean little for the first two days, until posts are old enough to
 judge.
 
+**Optional: a logged in Telegram account.** With one, posts arrive the moment they are published,
+channels with no public page can be read, and any channel you join on that account (private ones
+too) is followed. Use a separate account with its own phone number, not your personal one.
+
+1. Log into **my.telegram.org** with that account, open **API development tools**, and create an
+   app (any name). Note the `api_id` and `api_hash`.
+2. Add to `.env`: `TELEGRAM_API_ID=...`, `TELEGRAM_API_HASH=...`, `TELEGRAM_PHONE=+15551234567`
+3. `bash ~/wassup/scripts/update.sh`, then log in once:
+   `docker compose exec app wassup telegram login` and type the code Telegram sends to the account
+   (and its two step password, if it has one).
+
+Within a minute Wassup starts joining the followed channels, about one a minute, and they show
+**live** in the SOURCES tab. Wassup only reads: it never posts, never opens files, and joins
+channels only, never groups. The login is kept in `data/telegram`; delete that folder to log out.
+
 ## Tuning what you see
 
 Everything you are likely to change lives in `config/` and is mounted into the container, so edits apply on restart (`docker compose restart app`), followed by `wassup retriage` for desk or interest changes.

@@ -345,3 +345,4 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
 .src-stats { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 10.5px; color: var(--text-2); }
 .src-actions { display: flex; gap: 4px; }
 .src-actions .btn { padding: 3px 7px; font-size: 10px; }
+.src-name .chip.live { color: var(--ok); border-color: var(--ok); }
