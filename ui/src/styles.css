@@ -420,3 +420,4 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
 .iv-finding { color: var(--text-2); margin: 3px 0 0 4px; }
 .iv-lead-add { display: flex; gap: 6px; margin-top: 8px; }
 .iv-lead-add input { flex: 1; background: var(--bg-2); border: 1px solid var(--line-2); color: var(--text); padding: 6px 9px; border-radius: 4px; font: 12px var(--sans); }
+.strike-card .sc-story { display: block; text-align: left; background: none; border: none; padding: 1px 0; color: var(--accent); cursor: pointer; font: 11.5px var(--sans); }

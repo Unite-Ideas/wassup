@@ -130,6 +130,19 @@ def _strikes(conn, track_id: int, at: datetime, days: float) -> dict:
     return {"kind": "strikes", "snapshot": None, "previous": None, "summary": summary, "features": _fc(feats)}
 
 
+@router.get("/{track_id}/attacks/{obs_id}")
+def attack(track_id: int, obs_id: int) -> dict:
+    """One attack arrow, explained: where it points, how long it has been there, ground changing
+    hands around it, and strikes and news nearby (tracks/arrows.py)."""
+    from .tracks.arrows import attack_info
+
+    with db.connect() as conn:
+        info = attack_info(conn, obs_id)
+    if not info:
+        raise HTTPException(404, "no such arrow")
+    return info
+
+
 class ObservationIn(BaseModel):
     status: str  # confirmed | rejected | auto
 
@@ -152,10 +165,11 @@ def _front_features(snap_id: int, prev_id: int | None) -> dict:
     """GeoJSON for one front snapshot and its changes. Cached: snapshots never change."""
     with db.connect() as conn:
         rows = conn.execute(
-            """SELECT category, props, ST_AsGeoJSON(geom, 5) AS g FROM track_observations WHERE snapshot_id = %s
+            """SELECT id, track_id, category, props, ST_AsGeoJSON(geom, 5) AS g FROM track_observations WHERE snapshot_id = %s
                ORDER BY CASE category WHEN 'liberated' THEN 0 WHEN 'occupied' THEN 1 WHEN 'contested' THEN 2 ELSE 3 END""",
             (snap_id,)).fetchall()
-        feats = [_feature(r["g"], {"category": r["category"], **(r["props"] or {})}) for r in rows]
+        feats = [_feature(r["g"], {"category": r["category"], **(r["props"] or {}),
+                                   **({"id": r["id"], "track_id": r["track_id"]} if r["category"] == "attack" else {})}) for r in rows]
         if prev_id:
             for r in conn.execute(
                 """WITH a AS (SELECT geom FROM track_observations WHERE snapshot_id = %(s)s AND category = 'occupied'),

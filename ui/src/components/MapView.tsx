@@ -187,6 +187,56 @@ function strikeCard(raw: Record<string, unknown>): HTMLElement {
   return root;
 }
 
+interface Town { name: string; admin1: string; km: number }
+interface ArrowInfo {
+  observed_at: string; heading: string | null;
+  near: Town | null; towards: Town | null;
+  persistence: { since: string | null; run_days: number; at_least: boolean; maps_last_year: number; marked_last_year: number };
+  ground: Record<"week" | "month", { since: string; taken_km2: number; retaken_km2: number } | null>;
+  strikes: { count: number; latest: { observed_at: string; label: string; weapon: string; outcome: string; source_url: string }[] };
+  stories: { id: number; title: string; last_seen: string; item_count: number }[];
+}
+
+/** A DeepStateMap attack arrow, explained (tracks/arrows.py). DOM nodes only, no HTML. */
+function arrowCard(i: ArrowInfo, openStory: (id: number) => void): HTMLElement {
+  const el = (tag: string, cls: string, text?: string) => { const e = document.createElement(tag); e.className = cls; if (text) e.textContent = text; return e; };
+  const date = (s: string) => new Date(s).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  const place = (t: Town) => `${t.name}${t.admin1 ? `, ${t.admin1}` : ""}`;
+  const root = el("div", "strike-card");
+  root.append(el("div", "sc-title", i.towards ? `Push towards ${place(i.towards)}` : "Direction of attack"));
+  root.append(el("div", "sc-meta", [`DeepStateMap, ${date(i.observed_at)}`, i.heading ? `heading ${i.heading}` : "",
+    i.near ? `near ${i.near.name} (${i.near.km} km)` : "", i.towards ? `${i.towards.name} is ${i.towards.km} km ahead` : ""].filter(Boolean).join(" · ")));
+  const p = i.persistence;
+  if (p.since) {
+    root.append(el("div", "sc-meta", `Marked here ${p.at_least ? "at least " : ""}since ${date(p.since)} (${p.run_days} days)` +
+      (p.maps_last_year ? `; on ${p.marked_last_year} of ${p.maps_last_year} maps in the last year` : "")));
+  }
+  for (const [label, g] of [["7 days", i.ground.week], ["30 days", i.ground.month]] as const) {
+    if (!g) continue;
+    const moved = g.taken_km2 > 0.05 || g.retaken_km2 > 0.05;
+    root.append(el("div", moved ? "sc-warn" : "sc-meta",
+      `Within 15 km, last ${label}: ${moved ? [g.taken_km2 > 0.05 ? `${g.taken_km2.toFixed(1)} km² taken` : "", g.retaken_km2 > 0.05 ? `${g.retaken_km2.toFixed(1)} km² retaken` : ""].filter(Boolean).join(", ") : "no ground changed hands"}`));
+  }
+  root.append(el("div", "sc-meta", i.strikes.count ? `${i.strikes.count} strike${i.strikes.count === 1 ? "" : "s"} reported within 25 km in the last 14 days:` : "No strikes reported within 25 km in the last 14 days."));
+  for (const s of i.strikes.latest) {
+    const row = el("div", "sc-source");
+    const a = document.createElement("a");
+    a.href = s.source_url; a.target = "_blank"; a.rel = "noreferrer noopener"; a.textContent = s.label;
+    row.append(a, el("span", "sc-quote", ` ${date(s.observed_at)}, ${s.weapon}, ${String(s.outcome).replace("_", " ")}`));
+    root.append(row);
+  }
+  if (i.stories.length) {
+    root.append(el("div", "sc-meta", "News placed nearby, last 7 days:"));
+    for (const s of i.stories) {
+      const b = el("button", "sc-story", s.title) as HTMLButtonElement;
+      b.title = `${s.item_count} articles; open the story`;
+      b.onclick = () => openStory(s.id);
+      root.append(b);
+    }
+  }
+  return root;
+}
+
 export default function MapView({ data, desks, selection, storyDetail, visible, overlays, onSelectStory, onMapClick, focus }: Props) {
   const box = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
@@ -222,6 +272,12 @@ export default function MapView({ data, desks, selection, storyDetail, visible, 
       if (f) popup.setLngLat(e.lngLat).setText(String(f.properties.title)).addTo(m);
     });
     m.on("mouseleave", "story-dot", () => { m.getCanvas().style.cursor = ""; popup.remove(); });
+    // Arrows and strikes can be clicked too: show it.
+    m.on("mousemove", (e) => {
+      if (popup.isOpen()) return;
+      const hit = m.queryRenderedFeatures(e.point).some((f) => f.properties?.category === "strike" || (f.properties?.category === "attack" && f.properties?.id));
+      m.getCanvas().style.cursor = hit ? "pointer" : "";
+    });
     m.on("click", (e) => {
       const hit = m.queryRenderedFeatures(e.point, { layers: ["story-dot"] })[0];
       if (hit) {
@@ -229,6 +285,16 @@ export default function MapView({ data, desks, selection, storyDetail, visible, 
         return;
       }
       const all = m.queryRenderedFeatures(e.point);
+      const arrow = all.find((f) => f.properties?.category === "attack" && f.properties?.id);
+      if (arrow) {
+        const at = (arrow.geometry as GeoJSON.Point).coordinates as [number, number];
+        const pop = new maplibregl.Popup({ className: "map-popup strike-popup", offset: 8, maxWidth: "340px" })
+          .setLngLat(at).setText("Looking at this push…").addTo(m);
+        fetch(`/api/tracks/${arrow.properties.track_id}/attacks/${arrow.properties.id}`).then((r) => r.json())
+          .then((info) => pop.setDOMContent(arrowCard(info, (id) => latest.current.onSelectStory(id))))
+          .catch(() => pop.setText("Could not load details for this arrow."));
+        return;
+      }
       const strike = all.find((f) => f.properties?.category === "strike");
       if (strike) {
         new maplibregl.Popup({ className: "map-popup strike-popup", offset: 8, maxWidth: "320px" })

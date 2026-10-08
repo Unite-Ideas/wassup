@@ -154,6 +154,14 @@ attack (amber arrows), and what changed hands since the previous day, week or mo
 taken, blue retaken). The full history back to April 2022 downloads by itself over the first day.
 In the tracks panel, drag the slider to any date or press PLAY to watch the front move.
 
+The amber arrows are DeepState's directions of attack: where its analysts see an active push,
+pointing the way it goes. Click one (zoom in until they appear) for what Wassup works out about
+it: the town it points towards and the nearest one, how long DeepState has marked that push
+(following the arrow as it moves with the front, "at least" when it is older than the maps
+Wassup has), the ground taken and retaken within 15 km over the last week and month, strikes
+reported within 25 km in the last two weeks, and news stories placed nearby (click one to open
+it).
+
 The second kind of track follows a **migrant caravan**. When caravan stories appear, Wassup
 starts a track by itself and the local model reads each caravan article for where the group was,
 when, and how many people. The map shows the route day by day; the tracks panel lists every
