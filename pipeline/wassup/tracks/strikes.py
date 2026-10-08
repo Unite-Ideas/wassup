@@ -305,7 +305,7 @@ def run_strikes(conn: psycopg.Connection, llm=None, max_seconds: float = 240) ->
         from ..newsroom.llm import default_llm
         llm = default_llm()
     parallel = max(1, int(os.environ.get("STRIKES_PARALLEL", "2")))
-    started, done, found = time.time(), 0, 0
+    started, done, found, why = time.time(), 0, 0, Counter()
 
     def ask(it):
         m = it["meta"] or {}
@@ -322,26 +322,34 @@ def run_strikes(conn: psycopg.Connection, llm=None, max_seconds: float = 240) ->
             for it, out in ex.map(ask, todo[i:i + parallel * 2]):
                 if out is None:
                     continue  # not marked read: tried again next time
-                n = _store(conn, tracks, it, out.get("strikes") or [])
+                n = _store(conn, tracks, it, out.get("strikes") or [], why)
                 conn.execute("INSERT INTO strike_reads (item_id, strikes) VALUES (%s, %s) ON CONFLICT DO NOTHING", (it["id"], n))
                 conn.commit()
                 done += 1
                 found += n
     if done:
-        log.info("strikes: read %d posts, %d strikes placed", done, found)
+        log.info("strikes: read %d posts, %d strikes placed%s", done, found,
+                 "; left out: " + ", ".join(f"{k} {v}" for k, v in why.most_common()) if why else "")
     return done
 
 
-def _store(conn, tracks: dict[str, int], it: dict, strikes: list[dict]) -> int:
+def _store(conn, tracks: dict[str, int], it: dict, strikes: list[dict], why: Counter | None = None) -> int:
+    """Save the strikes that pass every check; `why` counts the ones that did not, by reason."""
     m = it["meta"] or {}
+    why = why if why is not None else Counter()
     n, seen = 0, set()
     for s in strikes[:8]:
         if not (s.get("place") or "").strip() or s.get("weapon") not in WEAPONS or s.get("outcome") not in OUTCOMES:
+            why["incomplete answer"] += 1
             continue
         if not _quote_ok(s.get("quote") or "", it["text"], [s["place"], s.get("place_original") or ""]):
+            why["quote not in post or only a flight path"] += 1
             continue
         where = geocode(s["place"], s.get("place_original"), s.get("province"), s.get("country"))
         if where is None:
+            why["place not found or ambiguous"] += 1
+            log.info("strikes: could not place %r (%r, %r, %r) from %s", s["place"], s.get("place_original"),
+                     s.get("province"), s.get("country"), it["url"])
             continue
         spot = exact_spot(it["text"], (where["lat"], where["lon"]))
         if spot:
@@ -350,6 +358,7 @@ def _store(conn, tracks: dict[str, int], it: dict, strikes: list[dict]) -> int:
             where = {**where, "how": "province"}
         region = region_of(where["country"], where["lat"], where["lon"])
         if region is None or (where["name"], region) in seen:
+            why["outside the regions or repeated" if region is None else "repeated in the post"] += 1
             continue
         seen.add((where["name"], region))
         when, dated = _parse_date(s.get("date"), it["published_at"])
