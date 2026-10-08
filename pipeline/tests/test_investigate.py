@@ -141,3 +141,63 @@ def test_investigation_from_links_to_summary(monkeypatch):
     assert client.get(f"/api/investigations/{inv}/sources/{rep['id']}/text").json()["text"].startswith("The full report text")
     assert client.post(f"/api/investigations/{inv}/sources/{rep['id']}", json={"action": "hide"}).status_code == 200
     assert any(i["id"] == inv for i in client.get("/api/investigations").json())
+
+
+@pytest.mark.usefixtures("database")
+def test_investigator_leads_notes_and_hand_off(monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from wassup import db
+    from wassup.api import app
+    from wassup.investigate import agent
+    from wassup.newsroom import store
+    from wassup.newsroom.paperclip import save_config
+
+    client = TestClient(app)
+    with db.connect() as conn:
+        conn.execute("UPDATE investigations SET status = 'done'")  # from other tests
+        conn.commit()
+    inv = client.post("/api/investigations", json={"title": "Board statement", "brief": "Who said what, when?"}).json()["id"]
+    # Not hired yet: asking says how to hire it.
+    r = client.post(f"/api/investigations/{inv}/ask", json={"note": "check the church video"})
+    assert r.status_code == 409 and "newsroom setup" in r.json()["detail"]
+
+    issues = []
+
+    class FakePaperclip:
+        def create_issue(self, company_id, title, description, assignee, **kw):
+            issues.append({"title": title, "description": description, "assignee": assignee, **kw})
+            return {"id": f"issue-{len(issues)}"}
+
+    monkeypatch.setattr(agent, "board", lambda conn: FakePaperclip())
+    with db.connect() as conn:
+        save_config(conn, board_token="t", company_id="c1", project_id="p1")
+        store.upsert_agent(conn, "investigator", "investigator", "Investigator", paperclip_agent_id="ag-inv", status="active")
+        conn.commit()
+        assert agent.investigator_ready(conn)
+        assert agent.hand_off(conn) == 0  # nothing read yet, nobody asked
+    assert client.get(f"/api/investigations/{inv}").json()["investigator"] is True
+
+    assert client.post(f"/api/investigations/{inv}/ask", json={"note": "check the church video"}).status_code == 200
+    with db.connect() as conn:
+        assert agent.hand_off(conn) == 1
+        assert agent.hand_off(conn) == 0  # not twice while it works
+    assert issues[0]["assignee"] == "ag-inv" and issues[0]["priority"] == "high"
+    assert f"/api/investigations/{inv}/brief" in issues[0]["description"] and "check the church video" in issues[0]["description"]
+
+    # What the Investigator does through the API.
+    lead = client.post(f"/api/investigations/{inv}/leads", json={"title": "Church livestream archive", "why": "The board spoke at a service"}).json()["id"]
+    assert client.post(f"/api/investigations/{inv}/leads/{lead}", json={"status": "done", "finding": "Service video found",
+                                                                       "urls": ["https://video.example/sept-27"]}).status_code == 200
+    assert client.post(f"/api/investigations/{inv}/leads/{lead}", json={"status": "solved"}).status_code == 400
+    assert client.post(f"/api/investigations/{inv}/links", json={"links": "https://video.example/sept-27", "found_by": "investigator"}).json()["added"] == 1
+    client.post(f"/api/investigations/{inv}/memo", json={"body": "## Checked\n- The service video shows the statement."})
+    d = client.get(f"/api/investigations/{inv}").json()
+    assert d["memo"].startswith("## Checked") and d["ask_note"] is None
+    assert d["leads"][0]["status"] == "done" and d["leads"][0]["urls"] == ["https://video.example/sept-27"]
+    assert next(s for s in d["sources"] if s["url"] == "https://video.example/sept-27")["found_by"] == "investigator"
+    text = client.get(f"/api/investigations/{inv}/brief").text
+    assert "Who said what, when?" in text and "Church livestream archive" in text and "Your notes from last time" in text
+    # Your own lead, for the Investigator to pick up.
+    assert client.post(f"/api/investigations/{inv}/leads", json={"title": "Ask about the district's report", "added_by": "you"}).status_code == 200
+    assert any(l["added_by"] == "you" for l in client.get(f"/api/investigations/{inv}/leads").json())

@@ -286,6 +286,12 @@ Phase 0 implementation notes:
   search (GDELT DOC API, YouTube search, Telegram global search of joined channels) and the
   summary. Tables `investigations` and `investigation_sources`; read sources become items with
   their full text, so they join stories like anything else.
+- **Investigator** (`investigate/agent.py`, `investigator_instructions.md`): a Paperclip agent on
+  the `claude_local` adapter, hired by `wassup newsroom setup`, reporting to the Editor in Chief.
+  The investigate lane opens a Paperclip issue for it when a first summary is ready, when you ask,
+  or every `review_hours` while new material arrives (capped per day). It reads
+  `/api/investigations/N/brief`, writes `investigation_leads`, adds sources (`found_by =
+  investigator`) and saves its notes (`memo`).
 
 ## Social channels
 

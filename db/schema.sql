@@ -478,3 +478,24 @@ CREATE TABLE IF NOT EXISTS investigation_sources (
     UNIQUE (investigation_id, url)
 );
 CREATE INDEX IF NOT EXISTS investigation_sources_status_idx ON investigation_sources (investigation_id, status);
+-- Leads: what to check next, planned and followed up by the Investigator agent (or added by you).
+CREATE TABLE IF NOT EXISTS investigation_leads (
+    id              bigserial PRIMARY KEY,
+    investigation_id integer NOT NULL REFERENCES investigations(id) ON DELETE CASCADE,
+    title           text NOT NULL,
+    why             text NOT NULL DEFAULT '',
+    how             text NOT NULL DEFAULT '',
+    status          text NOT NULL DEFAULT 'open',   -- open | working | done | dead_end | blocked | dropped
+    finding         text,
+    urls            jsonb NOT NULL DEFAULT '[]'::jsonb,
+    added_by        text NOT NULL DEFAULT 'investigator',  -- investigator | you
+    created_at      timestamptz NOT NULL DEFAULT now(),
+    updated_at      timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS investigation_leads_idx ON investigation_leads (investigation_id, status);
+ALTER TABLE investigations ADD COLUMN IF NOT EXISTS memo text;              -- the Investigator's notes
+ALTER TABLE investigations ADD COLUMN IF NOT EXISTS memo_at timestamptz;
+ALTER TABLE investigations ADD COLUMN IF NOT EXISTS investigator_at timestamptz;  -- last hand-off to the Investigator
+ALTER TABLE investigations ADD COLUMN IF NOT EXISTS investigator_issue text;
+ALTER TABLE investigations ADD COLUMN IF NOT EXISTS ask_note text;          -- you asked the Investigator to look now
+ALTER TABLE investigations ADD COLUMN IF NOT EXISTS ask_at timestamptz;

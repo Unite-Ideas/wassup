@@ -30,6 +30,9 @@ export const api = {
     post<{ id: number }>(`/investigations/${id}/text`, body),
   investigationEdit: (id: number, body: { title?: string; brief?: string; status?: string; watch_days?: number }) =>
     post(`/investigations/${id}`, body),
+  investigationAsk: (id: number, note: string) => post(`/investigations/${id}/ask`, { note }),
+  investigationAddLead: (id: number, title: string, why: string) => post<{ id: number }>(`/investigations/${id}/leads`, { title, why, added_by: "you" }),
+  investigationLead: (id: number, leadId: number, body: { status?: string }) => post(`/investigations/${id}/leads/${leadId}`, body),
   investigationRefresh: (id: number) => post(`/investigations/${id}/refresh`, {}),
   investigationSource: (id: number, sourceId: number, action: string) => post(`/investigations/${id}/sources/${sourceId}`, { action }),
   investigationSourceText: (id: number, sourceId: number) => get<{ text: string }>(`/investigations/${id}/sources/${sourceId}/text`),

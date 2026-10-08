@@ -74,7 +74,7 @@ def add_links(conn, inv: int, urls: list[str], found_by: str, parent: int | None
     n = 0
     total = conn.execute("SELECT count(*) AS n FROM investigation_sources WHERE investigation_id = %s", (inv,)).fetchone()["n"]
     for url in urls:
-        if total + n >= MAX_SOURCES and found_by != "you":
+        if total + n >= MAX_SOURCES and found_by not in ("you", "investigator"):
             break
         url = canonical(url)
         kind = "document" if DOCUMENT.search(url) else kind_of(url)
@@ -100,7 +100,7 @@ def clean_pasted(text: str) -> str:
 
 
 def add_text(conn, inv: int, text: str, url: str | None = None, title: str | None = None, author: str | None = None,
-             published_at: datetime | None = None) -> int:
+             published_at: datetime | None = None, found_by: str = "you") -> int:
     """Text you paste: the full version of a post Wassup could only partly read, or anything else."""
     text = clean_pasted(text)
     if url:
@@ -109,14 +109,14 @@ def add_text(conn, inv: int, text: str, url: str | None = None, title: str | Non
         n = conn.execute("SELECT count(*) AS n FROM investigation_sources WHERE investigation_id = %s", (inv,)).fetchone()["n"]
         url = f"wassup:pasted/{inv}/{n + 1}"
     conn.execute(
-        """INSERT INTO investigation_sources (investigation_id, url, kind, found_by, status) VALUES (%s, %s, %s, 'you', 'pending')
+        """INSERT INTO investigation_sources (investigation_id, url, kind, found_by, status) VALUES (%s, %s, %s, %s, 'pending')
            ON CONFLICT (investigation_id, url) DO NOTHING""",
-        (inv, url, "pasted" if url.startswith("wassup:") else kind_of(url)))
+        (inv, url, "pasted" if url.startswith("wassup:") else kind_of(url), found_by))
     src = conn.execute("SELECT * FROM investigation_sources WHERE investigation_id = %s AND url = %s", (inv, url)).fetchone()
     first_line = next((ln for ln in text.splitlines() if len(ln) > 15), text[:120])
     d = {"kind": src["kind"], "url": url, "title": title or src["title"] or first_line[:200], "text": text,
          "published_at": published_at or src["published_at"], "author": author or src["author"],
-         "outlet": src["outlet"] or (author or "Pasted by you"), "thumbnail": src["thumbnail"], "links": [], "pasted": True}
+         "outlet": src["outlet"] or (author or ("Pasted by you" if found_by == "you" else "Found by the Investigator")), "thumbnail": src["thumbnail"], "links": [], "pasted": True}
     _store_fetched(conn, inv, src, d)
     conn.commit()
     return src["id"]
@@ -134,6 +134,12 @@ def run_investigations(conn: psycopg.Connection, llm=None, max_seconds: float = 
         from ..newsroom.llm import default_llm
         llm = default_llm()
     started, work = time.time(), 0
+    try:
+        from .agent import hand_off
+        work += hand_off(conn)
+    except Exception:
+        conn.rollback()
+        log.exception("could not hand investigations to the Investigator")
     budget = max_seconds / len(invs)
     for inv in invs:
         until = min(started + max_seconds, time.time() + budget)
@@ -148,7 +154,7 @@ def run_investigations(conn: psycopg.Connection, llm=None, max_seconds: float = 
 def step_fetch(conn, inv: int, until: float) -> int:
     rows = conn.execute(
         """SELECT * FROM investigation_sources WHERE investigation_id = %s AND status = 'pending'
-           ORDER BY (found_by = 'you') DESC, depth, id LIMIT 12""", (inv,)).fetchall()
+           ORDER BY (found_by IN ('you', 'investigator')) DESC, depth, id LIMIT 12""", (inv,)).fetchall()
     conn.commit()
     if not rows:
         return 0
@@ -220,8 +226,8 @@ def step_related(conn, inv: dict) -> int:
     seeds = conn.execute(
         """SELECT s.id, i.embedding, i.story_id, i.published_at FROM investigation_sources s JOIN items i ON i.id = s.item_id
            WHERE s.investigation_id = %s AND NOT s.hidden AND i.embedding IS NOT NULL
-             AND (s.found_by = 'you' OR (s.analysis->>'relevant')::boolean)
-           ORDER BY (s.found_by = 'you') DESC, s.id LIMIT 12""", (inv["id"],)).fetchall()
+             AND (s.found_by IN ('you', 'investigator') OR (s.analysis->>'relevant')::boolean)
+           ORDER BY (s.found_by IN ('you', 'investigator')) DESC, s.id LIMIT 12""", (inv["id"],)).fetchall()
     conn.execute("UPDATE investigations SET related_at = now() WHERE id = %s", (inv["id"],))
     if not seeds:
         conn.commit()
@@ -340,7 +346,7 @@ def _text_of(conn, src: dict) -> str:
 def step_analyze(conn, inv: dict, llm, until: float, parallel: int = 2) -> int:
     rows = conn.execute(
         """SELECT * FROM investigation_sources WHERE investigation_id = %s AND status = 'fetched' AND NOT hidden
-           ORDER BY (found_by = 'you') DESC, (found_by = 'traced') DESC, similarity DESC NULLS LAST, id LIMIT %s""",
+           ORDER BY (found_by IN ('you', 'investigator')) DESC, (found_by = 'traced') DESC, similarity DESC NULLS LAST, id LIMIT %s""",
         (inv["id"], parallel * 3)).fetchall()
     jobs = []
     for src in rows:
@@ -563,3 +569,46 @@ Rules:
 
 def domain(url: str) -> str:
     return urlsplit(url).netloc.removeprefix("www.")
+
+
+def brief_text(conn, inv_id: int) -> str:
+    """The whole investigation as one readable text, for the Investigator agent."""
+    inv = conn.execute("SELECT * FROM investigations WHERE id = %s", (inv_id,)).fetchone()
+    srcs = conn.execute(
+        """SELECT * FROM investigation_sources WHERE investigation_id = %s AND NOT hidden
+           ORDER BY (status = 'analyzed') DESC, published_at NULLS LAST, id""", (inv_id,)).fetchall()
+    leads = conn.execute("SELECT * FROM investigation_leads WHERE investigation_id = %s ORDER BY id", (inv_id,)).fetchall()
+    out = [f"# Investigation {inv_id}: {inv['title']}", "", f"The researcher wants to know: {inv['brief'] or '(see title)'}"]
+    if inv["ask_note"]:
+        out += ["", f"The researcher's note for you: {inv['ask_note']}"]
+    s = inv["summary"] or {}
+    if s:
+        out += ["", "## Summary so far (written by the local model; check it)", s.get("headline", "")]
+        for a in s.get("answers") or []:
+            out.append(f"- Q: {a['question']}\n  A ({a['confidence']}): {a['answer']}")
+        for e in s.get("evidence") or []:
+            out.append(f"- Evidence: {e['what']} | held by {e['held_by']} | {e['status']} | {e.get('detail', '')}")
+        if s.get("origin"):
+            out.append(f"- How it came out: {s['origin']}")
+        for q in s.get("open_questions") or []:
+            out.append(f"- Unknown: {q}")
+    out += ["", f"## Sources ({len(srcs)}; full text: GET {inv_id}/sources/<id>/text)"]
+    for x in srcs:
+        a = x["analysis"] or {}
+        when = x["published_at"].strftime("%Y-%m-%d") if x["published_at"] else "date unknown"
+        line = f"- [{x['id']}] {when} | {x['outlet'] or x['kind']} | {x['status']}"
+        line += f" | {a.get('account')}" if a else ""
+        line += f" | found by {x['found_by']}" + (f" (cited by [{x['parent_id']}])" if x["parent_id"] else "")
+        line += f"\n  {x['title'] or ''}\n  {x['url']}"
+        if a.get("summary"):
+            line += f"\n  {a['summary']}"
+        if x["error"]:
+            line += f"\n  could not read: {x['error']}"
+        out.append(line)
+    out += ["", f"## Leads ({len(leads)})"]
+    for l in leads:
+        out.append(f"- [{l['id']}] {l['status']} | {l['title']} (added by {l['added_by']})"
+                   + (f"\n  why: {l['why']}" if l["why"] else "") + (f"\n  finding: {l['finding']}" if l["finding"] else ""))
+    if inv["memo"]:
+        out += ["", "## Your notes from last time", inv["memo"]]
+    return "\n".join(out)

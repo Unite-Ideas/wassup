@@ -360,7 +360,7 @@ export interface InvestigationSource {
   id: number;
   url: string;
   kind: string;
-  found_by: "you" | "wassup" | "search" | "traced";
+  found_by: "you" | "wassup" | "search" | "traced" | "investigator";
   parent_id: number | null;
   depth: number;
   status: "pending" | "fetched" | "analyzed" | "unrelated" | "failed";
@@ -400,4 +400,23 @@ export interface InvestigationDetail extends Omit<InvestigationListItem, "source
   queries: { query: string; language: string }[];
   searched_at: string | null;
   sources: InvestigationSource[];
+  leads: InvestigationLead[];
+  memo: string | null;
+  memo_at: string | null;
+  investigator: boolean;
+  investigator_at: string | null;
+  ask_at: string | null;
+  ask_note: string | null;
+}
+
+export interface InvestigationLead {
+  id: number;
+  title: string;
+  why: string;
+  how: string;
+  status: "open" | "working" | "done" | "dead_end" | "blocked" | "dropped";
+  finding: string | null;
+  urls: string[];
+  added_by: "investigator" | "you";
+  updated_at: string;
 }

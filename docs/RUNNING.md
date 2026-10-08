@@ -237,6 +237,23 @@ as you chose to keep watching (two weeks by default), Wassup:
    and their interests as reported, a timeline, how the story came out, where accounts disagree,
    and what is still unknown. It says "not reported" rather than guessing.
 
+**The Investigator** is a newsroom agent of its own (an investigative journalist on Claude Code,
+your subscription), separate from the Editor in Chief. Keyword search finds what is already being
+said; the Investigator thinks about where the truth would be recorded and goes to look: the
+organisations' own sites and statements, their video archives, old versions of pages (the
+Internet Archive), nonprofit tax filings, court records, and the open web. It writes **leads**
+(what to check and why), follows them, adds what it finds as sources (Wassup then reads and traces
+them like yours), marks leads that need a person (a records request, a phone call, a site that
+forbids automated searching), and leaves you **notes** answering your questions. It uses public
+material only, never logs in or contacts anyone, and looks as hard for what clears someone as for
+what accuses them.
+
+It starts by itself once an investigation's first summary is ready, looks again every 12 hours
+while new material comes in, and starts now when you press **ASK THE INVESTIGATOR** (add a note to
+point it somewhere). You can add your own leads for it. At most 6 runs a day in all
+(`investigator:` in `config/newsroom.yaml`). To hire it the first time, after updating:
+`docker compose exec app wassup newsroom setup`.
+
 Sources open on **FIRST-HAND**; **ALL, BY DATE** shows how the story spread. **pin** a source to
 make sure the summary uses it, **hide** one to leave it out, and **LOOK AGAIN** to search and
 summarise again now. The summary is the local model's reading of the sources: check the sources

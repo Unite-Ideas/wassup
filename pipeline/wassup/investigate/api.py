@@ -4,6 +4,8 @@ from __future__ import annotations
 from datetime import datetime
 
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import PlainTextResponse
+from psycopg.types.json import Jsonb
 from pydantic import BaseModel
 
 from .. import db
@@ -55,11 +57,16 @@ def get(inv_id: int) -> dict:
                FROM investigation_sources s LEFT JOIN items i ON i.id = s.item_id
                LEFT JOIN item_texts t ON t.item_id = s.item_id
                WHERE s.investigation_id = %s ORDER BY s.published_at NULLS LAST, s.id""", (inv_id,)).fetchall()
-    return {**inv, "sources": sources}
+        lead_rows = conn.execute("SELECT * FROM investigation_leads WHERE investigation_id = %s ORDER BY id", (inv_id,)).fetchall()
+    from .agent import investigator_ready
+    with db.connect() as conn:
+        ready = investigator_ready(conn)
+    return {**inv, "sources": sources, "leads": lead_rows, "investigator": ready}
 
 
 class LinksIn(BaseModel):
     links: str
+    found_by: str = "you"  # you | investigator
 
 
 @router.post("/{inv_id}/links")
@@ -69,7 +76,7 @@ def add_links(inv_id: int, body: LinksIn) -> dict:
         raise HTTPException(400, "no links found in what you pasted")
     with db.connect() as conn:
         _exists(conn, inv_id)
-        n = core.add_links(conn, inv_id, urls, "you")
+        n = core.add_links(conn, inv_id, urls, _by(body.found_by))
         conn.execute("UPDATE investigations SET status = 'active' WHERE id = %s AND status = 'done'", (inv_id,))
         conn.commit()
     return {"added": n}
@@ -81,6 +88,7 @@ class TextIn(BaseModel):
     title: str | None = None
     author: str | None = None
     published_at: datetime | None = None
+    found_by: str = "you"
 
 
 @router.post("/{inv_id}/text")
@@ -89,7 +97,8 @@ def add_text(inv_id: int, body: TextIn) -> dict:
         raise HTTPException(400, "paste at least a sentence")
     with db.connect() as conn:
         _exists(conn, inv_id)
-        sid = core.add_text(conn, inv_id, body.text, (body.url or "").strip() or None, body.title, body.author, body.published_at)
+        sid = core.add_text(conn, inv_id, body.text, (body.url or "").strip() or None, body.title, body.author, body.published_at,
+                            _by(body.found_by))
     return {"id": sid}
 
 
@@ -163,3 +172,99 @@ def source_text(inv_id: int, source_id: int) -> dict:
 def _exists(conn, inv_id: int) -> None:
     if not conn.execute("SELECT 1 FROM investigations WHERE id = %s", (inv_id,)).fetchone():
         raise HTTPException(404, "no such investigation")
+
+
+def _by(found_by: str) -> str:
+    return "investigator" if found_by == "investigator" else "you"
+
+
+# --- the Investigator agent (investigate/investigator_instructions.md) --------------------------
+
+@router.get("/{inv_id}/brief", response_class=PlainTextResponse)
+def brief(inv_id: int) -> str:
+    """Everything about an investigation, as one text, for the Investigator."""
+    with db.connect() as conn:
+        _exists(conn, inv_id)
+        return core.brief_text(conn, inv_id)
+
+
+@router.get("/{inv_id}/leads")
+def leads(inv_id: int) -> list[dict]:
+    with db.connect() as conn:
+        return conn.execute("SELECT * FROM investigation_leads WHERE investigation_id = %s ORDER BY id", (inv_id,)).fetchall()
+
+
+class LeadIn(BaseModel):
+    title: str
+    why: str = ""
+    how: str = ""
+    added_by: str = "investigator"
+
+
+@router.post("/{inv_id}/leads")
+def add_lead(inv_id: int, body: LeadIn) -> dict:
+    if not body.title.strip():
+        raise HTTPException(400, "a lead needs a title")
+    with db.connect() as conn:
+        _exists(conn, inv_id)
+        row = conn.execute(
+            """INSERT INTO investigation_leads (investigation_id, title, why, how, added_by) VALUES (%s, %s, %s, %s, %s) RETURNING id""",
+            (inv_id, body.title.strip()[:300], body.why.strip(), body.how.strip(), "you" if body.added_by == "you" else "investigator")).fetchone()
+        conn.commit()
+    return {"id": row["id"]}
+
+
+class LeadUpdate(BaseModel):
+    status: str | None = None
+    finding: str | None = None
+    urls: list[str] | None = None
+    title: str | None = None
+
+
+@router.post("/{inv_id}/leads/{lead_id}")
+def update_lead(inv_id: int, lead_id: int, body: LeadUpdate) -> dict:
+    if body.status and body.status not in ("open", "working", "done", "dead_end", "blocked", "dropped"):
+        raise HTTPException(400, "status must be open, working, done, dead_end, blocked or dropped")
+    with db.connect() as conn:
+        n = conn.execute(
+            """UPDATE investigation_leads SET status = coalesce(%s, status), finding = coalesce(%s, finding),
+                      urls = coalesce(%s, urls), title = coalesce(%s, title), updated_at = now()
+               WHERE id = %s AND investigation_id = %s""",
+            (body.status, body.finding, Jsonb(body.urls) if body.urls is not None else None, body.title, lead_id, inv_id)).rowcount
+        conn.commit()
+    if not n:
+        raise HTTPException(404, "no such lead")
+    return {"ok": True}
+
+
+class MemoIn(BaseModel):
+    body: str
+
+
+@router.post("/{inv_id}/memo")
+def memo(inv_id: int, body: MemoIn) -> dict:
+    with db.connect() as conn:
+        _exists(conn, inv_id)
+        conn.execute("UPDATE investigations SET memo = %s, memo_at = now(), ask_note = NULL, updated_at = now() WHERE id = %s",
+                     (body.body, inv_id))
+        conn.commit()
+    return {"ok": True}
+
+
+class AskIn(BaseModel):
+    note: str = ""
+
+
+@router.post("/{inv_id}/ask")
+def ask(inv_id: int, body: AskIn) -> dict:
+    """Ask the Investigator to look at this investigation now, optionally with a note."""
+    from .agent import investigator_ready
+
+    with db.connect() as conn:
+        _exists(conn, inv_id)
+        if not investigator_ready(conn):
+            raise HTTPException(409, "The Investigator is not hired yet: run `docker compose exec app wassup newsroom setup`.")
+        conn.execute("UPDATE investigations SET ask_note = %s, ask_at = now(), status = 'active' WHERE id = %s",
+                     (body.note.strip() or None, inv_id))
+        conn.commit()
+    return {"ok": True}

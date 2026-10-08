@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { type ReactElement, useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "../lib/api";
-import type { InvestigationDetail, InvestigationListItem, InvestigationSource, InvestigationSummary } from "../lib/types";
+import type { InvestigationDetail, InvestigationLead, InvestigationListItem, InvestigationSource, InvestigationSummary } from "../lib/types";
 import { ago } from "../lib/format";
 
 const ACCOUNT: Record<string, { label: string; cls: string; tip: string }> = {
@@ -13,7 +13,76 @@ const ACCOUNT: Record<string, { label: string; cls: string; tip: string }> = {
   commentary: { label: "commentary", cls: "comment", tip: "Opinion or reaction" },
   unrelated: { label: "unrelated", cls: "second", tip: "Not about this story" },
 };
-const FOUND: Record<string, string> = { you: "you", wassup: "already in Wassup", search: "search", traced: "cited" };
+const FOUND: Record<string, string> = { you: "you", wassup: "already in Wassup", search: "search", traced: "cited", investigator: "found by the Investigator" };
+const LEAD: Record<string, { label: string; cls: string }> = {
+  open: { label: "to do", cls: "" }, working: { label: "working", cls: "acc-orig" }, done: { label: "found", cls: "acc-first" },
+  dead_end: { label: "nothing there", cls: "acc-second" }, blocked: { label: "needs a person", cls: "warn" }, dropped: { label: "dropped", cls: "acc-second" },
+};
+
+/** Light markdown for the Investigator's notes: headings, bullets, bold and links. Built as
+ *  elements, never as HTML, so nothing in the notes can run in the page. */
+function Notes({ text }: { text: string }) {
+  const inline = (s: string, key: number) => {
+    const parts: (string | ReactElement)[] = [];
+    const re = /(\*\*[^*]+\*\*|https?:\/\/[^\s)]+)/g;
+    let last = 0, m: RegExpExecArray | null, i = 0;
+    while ((m = re.exec(s))) {
+      parts.push(s.slice(last, m.index));
+      const t = m[0];
+      parts.push(t.startsWith("**") ? <b key={`${key}-${i++}`}>{t.slice(2, -2)}</b>
+        : <a key={`${key}-${i++}`} href={t} target="_blank" rel="noreferrer noopener">{t}</a>);
+      last = m.index + t.length;
+    }
+    parts.push(s.slice(last));
+    return parts;
+  };
+  return (
+    <div className="iv-notes">
+      {text.split("\n").map((ln, i) => {
+        const t = ln.trim();
+        if (!t) return <div key={i} className="gap" />;
+        if (t.startsWith("#")) return <div key={i} className="h">{t.replace(/^#+\s*/, "")}</div>;
+        if (/^[-*] /.test(t)) return <div key={i} className="li">• {inline(t.slice(2), i)}</div>;
+        return <div key={i}>{inline(t, i)}</div>;
+      })}
+    </div>
+  );
+}
+
+function Leads({ inv, onChange }: { inv: InvestigationDetail; onChange: () => void }) {
+  const [title, setTitle] = useState("");
+  const [open, setOpen] = useState<number | null>(null);
+  const add = () => title.trim() && api.investigationAddLead(inv.id, title, "").then(() => { setTitle(""); onChange(); });
+  const order = (l: InvestigationLead) => ["working", "open", "done", "blocked", "dead_end", "dropped"].indexOf(l.status);
+  return (
+    <div className="iv-sec">
+      <div className="h">Leads <span className="dimmer">{inv.leads.filter((l) => l.status === "done").length} found, {inv.leads.filter((l) => l.status === "open" || l.status === "working").length} to do</span></div>
+      {[...inv.leads].sort((a, b) => order(a) - order(b) || a.id - b.id).map((l) => (
+        <div key={l.id} className="iv-lead">
+          <div>
+            <span className={`chip ${LEAD[l.status].cls}`}>{LEAD[l.status].label}</span>{" "}
+            <button className="linkish" onClick={() => setOpen(open === l.id ? null : l.id)}><b>{l.title}</b></button>
+            {l.added_by === "you" && <span className="dimmer mono"> · yours</span>}
+          </div>
+          {l.finding && <div className="iv-finding">{l.finding}</div>}
+          {open === l.id && (
+            <div className="dim iv-small">
+              {l.why && <div>Why: {l.why}</div>}
+              {l.how && <div>How: {l.how}</div>}
+              {l.urls.map((u) => <div key={u}><a href={u} target="_blank" rel="noreferrer noopener">{u}</a></div>)}
+              {l.status !== "dropped" && <button className="linkish" onClick={() => api.investigationLead(inv.id, l.id, { status: "dropped" }).then(onChange)}>drop this lead</button>}
+            </div>
+          )}
+        </div>
+      ))}
+      <div className="iv-lead-add">
+        <input value={title} onChange={(e) => setTitle(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add()}
+          placeholder="Your own lead for the Investigator, for example: check the church's YouTube for the Sept 27 service" />
+        <button className="btn" onClick={add}>ADD LEAD</button>
+      </div>
+    </div>
+  );
+}
 const EVIDENCE: Record<string, string> = {
   "only described": "warn", "seen by a reporter": "orig", "checked independently": "first", disputed: "alert",
 };
@@ -174,6 +243,8 @@ export default function InvestigateView() {
   const [draft, setDraft] = useState({ links: "", text: "", url: "", author: "" });
   const [msg, setMsg] = useState<string | null>(null);
   const [flash, setFlash] = useState<number | null>(null);
+  const [asking, setAsking] = useState(false);
+  const [askNote, setAskNote] = useState("");
 
   const loadList = useCallback(() => api.investigations().then((l) => {
     setList(l);
@@ -244,6 +315,8 @@ export default function InvestigateView() {
                 </div>
               </div>
               <div className="iv-buttons">
+                <button className={`btn ${inv.investigator ? "primary" : ""}`} onClick={() => setAsking(!asking)}
+                  title={inv.investigator ? "Wake the Investigator now" : "The Investigator is not hired yet"}>ASK THE INVESTIGATOR</button>
                 <button className="btn" onClick={() => setAdding(adding === "links" ? null : "links")}>ADD LINKS</button>
                 <button className="btn" onClick={() => { setAdding(adding === "text" ? null : "text"); setDraft((d) => ({ ...d, url: "" })); }}>PASTE TEXT</button>
                 <button className="btn" onClick={() => api.investigationRefresh(inv.id).then(() => { setMsg("Looking again: related reports, a new search and a new summary."); load(); })}>LOOK AGAIN</button>
@@ -252,6 +325,20 @@ export default function InvestigateView() {
                 </button>
               </div>
             </div>
+            {asking && (
+              <div className="iv-add">
+                {inv.investigator ? <>
+                  <div className="dim iv-small">The Investigator (Claude, on your subscription) plans leads, checks records, archives and the open web,
+                    adds what it finds as sources, and writes you notes. It also looks by itself when the first summary is ready and every
+                    12 hours while there is new material.{inv.ask_at && " It has been asked already and will start within a minute."}</div>
+                  <textarea rows={3} value={askNote} onChange={(e) => setAskNote(e.target.value)} placeholder="Anything to focus on? (optional)" />
+                  <button className="btn primary" onClick={() => api.investigationAsk(inv.id, askNote).then(() => {
+                    setAsking(false); setAskNote(""); setMsg("The Investigator will start within a minute. Its notes and leads appear here as it works."); load();
+                  }).catch((e) => setMsg(String(e.message ?? e)))}>SEND</button>
+                </> : <div className="warn-text">The Investigator is not hired yet. In Ubuntu run:
+                  <code> docker compose exec app wassup newsroom setup</code></div>}
+              </div>
+            )}
             {adding && (
               <div className="iv-add">
                 {adding === "links"
@@ -267,6 +354,17 @@ export default function InvestigateView() {
             {inv.summary
               ? <Summary s={inv.summary} onJump={jump} when={inv.summary_at} from={inv.summary_sources} />
               : <div className="iv-summary dim">The summary is written once the first sources have been read. This takes a few minutes; the page updates by itself.</div>}
+            {(inv.memo || inv.leads.length > 0 || inv.investigator_at) && (
+              <div className="iv-summary">
+                <h3>The Investigator</h3>
+                <div className="dimmer mono iv-note">
+                  {inv.investigator_at ? `Last assigned ${ago(inv.investigator_at)}` : "Not assigned yet"}
+                  {inv.memo_at && `, notes written ${ago(inv.memo_at)}`}. Claude on your subscription; public material only.
+                </div>
+                {inv.memo ? <Notes text={inv.memo} /> : <div className="dim">No notes yet. They appear when it finishes a round of work.</div>}
+                <Leads inv={inv} onChange={load} />
+              </div>
+            )}
             <div className="iv-tabs mono">
               {([["firsthand", "FIRST-HAND"], ["all", "ALL, BY DATE"], ["traced", "CITED SOURCES"], ["unrelated", "NOT ABOUT IT"], ["problems", "COULD NOT READ"]] as [Tab, string][]).map(([k, label]) => (
                 <button key={k} className={`btn ${tab === k ? "on" : ""}`} onClick={() => setTab(k)}>{label} <span className="dimmer">{groups[k].length}</span></button>

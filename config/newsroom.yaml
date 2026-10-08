@@ -31,3 +31,10 @@ surge:
 
 limits:
   max_agents: 20                   # all newsroom agents, Editor in Chief and desks included
+
+investigator:
+  name: Investigator               # an investigative journalist for the INVESTIGATE tab, on Claude Code
+  model: claude-sonnet-5-5
+  review_hours: 12                 # looks again at an active investigation this often, if there is new material
+  max_runs_per_day: 6              # all investigations together, at most (your own requests included)
+  budget_monthly_usd: 0            # 0 means no limit beyond your subscription
