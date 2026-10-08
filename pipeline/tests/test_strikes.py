@@ -29,6 +29,10 @@ def test_quote_must_come_from_the_post_and_name_the_place():
     assert _quote_ok("Влучання в обʼєкт енергетики у Харкові.", post, ["Kharkiv", "Харків"])
     assert not _quote_ok("Влучання в обʼєкт енергетики у Сумах.", post, ["Sumy", "Суми"])  # not in the post
     assert not _quote_ok("Вночі ворог атакував Харків ударними БпЛА.", post, ["Sumy", "Суми"])  # another place
+    flight = "Черкащина - Реактивний БпЛА на/повз Жашків курсом на Вінниччину."
+    assert not _quote_ok(flight, flight, ["Zhashkiv", "Жашків"])  # on its way, not a strike
+    hit = "БпЛА курсом на Жашків, згодом влучання в обʼєкт у Жашкові."
+    assert _quote_ok(hit, hit, ["Zhashkiv", "Жашків"])
 
 
 def test_prefilter():

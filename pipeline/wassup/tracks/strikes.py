@@ -60,6 +60,14 @@ STRIKE = re.compile(
     r"غار[ةا]|قصف|انفجار|صاروخ|صواريخ|مسير|استهداف|اعتراض|"
     r"פיצוץ|טיל|רקט|כטב|תקיפ|יירוט|"
     r"حمله|موشک|پهپاد", re.I)
+# A drone or missile on its way somewhere ("БпЛА повз Жашків курсом на Вінниччину") is not a
+# strike, and small models often say it is. A quote with flight words and nothing about an impact
+# is dropped whatever the model says.
+FLIGHT = re.compile(r"курс(ом)? на|повз|у напрямку|в направлении|в сторону|в бік|рухає|heading|towards|toward|on course|"
+                    r"en route|flying over|in flight", re.I)
+IMPACT = re.compile(r"влуч|попад|уражен|поражен|вибух|взрыв|explo|\bhit|struck|strike|damag|пошкодж|поврежд|пожеж|пожар|"
+                    r"\bfire|загин|погиб|поранен|ранен|killed|injur|збит|сбит|знищ|уничтож|intercept|shot down|destroy|"
+                    r"انفجار|غارة|قصف|استهداف|פיצוץ|נפילה|פגיעה", re.I)
 _PLACE_WORDS = {"village", "town", "city", "of", "the", "settlement", "district", "село", "селище", "місто", "город",
                 "поселок", "посёлок", "смт", "пгт", "м", "с", "г", "п", "selo", "smt", "al"}
 
@@ -214,8 +222,10 @@ Return an empty list if the post reports no strikes."""
 
 
 def _quote_ok(quote: str, post: str, names: list[str]) -> bool:
-    """The model must quote the post, and the quote must name the place (allowing for case
-    endings: 'Харкові' names 'Харків')."""
+    """The model must quote the post, the quote must name the place (allowing for case endings:
+    'Харкові' names 'Харків'), and it must not be only a flight path."""
+    if FLIGHT.search(quote or "") and not IMPACT.search(quote or ""):
+        return False
     q, src = unorm(quote), unorm(post)
     if len(q) < 10 or (q[:50] not in src and q[-35:] not in src):
         return False
