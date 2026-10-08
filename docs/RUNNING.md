@@ -170,7 +170,9 @@ in their Latin, Cyrillic, Arabic and Hebrew spellings; a village whose name seve
 is left off unless the post says which province. Reports of the same place within six hours are
 one strike. On the map, orange is a hit, grey intercepted, yellow explosions only; bigger means
 more reports, a white ring means two or more channels or news outlets reported it, and older
-strikes fade. Click one to see who reported it, with links to the posts. Use the 1 DAY, 7 DAYS
+strikes fade. Click one to see who reported it, with links to the posts, and the photos from
+those posts (click a photo to open it full size). Photos are saved only for posts that put a strike
+on the map, in `data/telegram/media`; for a video only its preview image is kept. Use the 1 DAY, 7 DAYS
 and 30 DAYS buttons to choose the span, and **reject** in the panel to hide a wrong one for good.
 It reads only Telegram posts from the last 36 hours, two at a time (`STRIKES_PARALLEL` in `.env`;
 `STRIKES=off` to stop it).

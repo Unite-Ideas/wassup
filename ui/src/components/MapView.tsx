@@ -158,6 +158,19 @@ function strikeCard(raw: Record<string, unknown>): HTMLElement {
   const province = p.admin1 && !String(p.admin1).startsWith(String(p.label).slice(0, 5)) ? `, ${p.admin1}` : "";
   root.append(el("div", "sc-title", `${p.label}${province}`));
   if (p.rough) root.append(el("div", "sc-warn", "Only the province is given; shown on its main city"));
+  const photos = (p.photos ?? []) as string[];
+  if (photos.length) {
+    const row = el("div", "sc-photos");
+    for (const src of photos) {
+      const a = document.createElement("a");
+      a.href = src; a.target = "_blank"; a.rel = "noreferrer noopener"; a.title = "Open the photo";
+      const img = document.createElement("img");
+      img.src = src; img.loading = "lazy"; img.alt = "Photo from the post";
+      a.append(img);
+      row.append(a);
+    }
+    root.append(row);
+  }
   root.append(el("div", "sc-meta", [when, WEAPON[p.weapon] ?? p.weapon, OUTCOME[p.outcome] ?? p.outcome, p.attacker ? `by ${p.attacker}` : ""].filter(Boolean).join(" · ")));
   const toll = [p.target, p.killed ? `${p.killed} killed` : "", p.injured ? `${p.injured} injured` : ""].filter(Boolean).join(" · ");
   if (toll) root.append(el("div", "sc-meta", toll));

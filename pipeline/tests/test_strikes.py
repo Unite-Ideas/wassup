@@ -99,8 +99,17 @@ class FakeLLM:
 
 
 @pytest.mark.usefixtures("database")
-def test_strikes_from_posts_to_map():
+def test_strikes_from_posts_to_map(monkeypatch, tmp_path):
+    import httpx
     from fastapi.testclient import TestClient
+
+    from wassup.social import media as media_mod
+
+    jpeg = b"\xff\xd8\xff\xe0fake jpeg"
+    real_client = httpx.Client
+    monkeypatch.setattr(media_mod, "media_dir", lambda: tmp_path)
+    monkeypatch.setattr(media_mod.httpx, "Client", lambda **kw: real_client(transport=httpx.MockTransport(
+        lambda req: httpx.Response(200, content=jpeg, headers={"content-type": "image/jpeg"}))))
 
     from wassup import db
     from wassup.api import app
@@ -121,7 +130,8 @@ def test_strikes_from_posts_to_map():
             acct = conn.execute("SELECT * FROM social_accounts WHERE handle = %s", (handle,)).fetchone()
             store_posts(conn, acct, {"name": handle, "subscribers": None, "posts": [
                 {"id": 10 + i, "text": text, "at": now - timedelta(minutes=30 - i), "views": 1, "forwarded_from": None,
-                 "forwarded_name": None, "links": [], "media": []}]})
+                 "forwarded_name": None, "links": [],
+                 "media": ["https://cdn.example/kharkiv.jpg"] if handle == "osint_feed" else []}]})
         conn.commit()
         llm = FakeLLM()
         assert run_strikes(conn, llm=llm, max_seconds=60) == 2  # the talk show post is never asked about
@@ -138,6 +148,10 @@ def test_strikes_from_posts_to_map():
     ev = st["features"]["features"][0]["properties"]
     assert ev["channels"] == 2 and ev["corroborated"] and ev["weapon"] == "drone" and ev["attacker"] == "Russia"
     assert ev["target"] in ("energy facility", "power plant") and ev["injured"] == 2
+    # The photo from the post was saved and is served for the map card.
+    assert len(ev["photos"]) == 1
+    assert client.get(ev["photos"][0]).content == jpeg
+    assert client.get("/api/media/999999/0").status_code == 404
     # Rejecting every report of a strike takes it off the map.
     for i in ev["ids"]:
         client.post(f"/api/tracks/observations/{i}", json={"status": "rejected"})

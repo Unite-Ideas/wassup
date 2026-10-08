@@ -376,6 +376,18 @@ CREATE TABLE IF NOT EXISTS strike_reads (
     strikes         integer NOT NULL DEFAULT 0,
     read_at         timestamptz NOT NULL DEFAULT now()
 );
+-- done | none | failed, once the post's photos have been looked for (social/media.py)
+ALTER TABLE strike_reads ADD COLUMN IF NOT EXISTS media_status text;
+-- Photos saved from posts (data/telegram/media), shown on the map.
+CREATE TABLE IF NOT EXISTS item_media (
+    item_id         bigint NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+    n               integer NOT NULL,
+    path            text NOT NULL,                  -- relative to data/telegram/media
+    kind            text NOT NULL,                  -- photo | video_preview
+    bytes           integer,
+    saved_at        timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (item_id, n)
+);
 
 -- Social channels (Telegram first). Each has a source row so its posts flow through the
 -- pipeline like articles; the scout (social/scout.py) scores, discovers, promotes and drops them.

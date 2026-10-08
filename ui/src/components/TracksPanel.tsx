@@ -136,6 +136,13 @@ function Strikes({ state, onFocus, onChange }: { state: TrackState; onFocus: (ln
                   {[p.target, p.killed ? `${p.killed} killed` : "", p.injured ? `${p.injured} injured` : ""].filter(Boolean).join(" · ")}
                 </div>
                 {p.quote && <div className="tp-quote">“{p.quote}”</div>}
+                {(p.photos as string[] | undefined)?.length ? (
+                  <div className="tp-photos">
+                    {(p.photos as string[]).slice(0, 4).map((src) => (
+                      <a key={src} href={src} target="_blank" rel="noreferrer noopener" title="Open the photo"><img src={src} loading="lazy" alt="Photo from the post" /></a>
+                    ))}
+                  </div>
+                ) : null}
                 <div className="tp-report-actions">
                   {(p.sources as { handle: string; url: string }[]).slice(0, 3).map((s) => (
                     <a key={s.url} href={s.url} target="_blank" rel="noreferrer noopener">@{s.handle}</a>

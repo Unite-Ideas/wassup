@@ -269,7 +269,10 @@ Phase 0 implementation notes:
   every script (`data/conflict_places.tsv.gz`, built by `scripts/build_conflict_places.py`),
   never with coordinates the model guesses; `strike_reads` records posts already read. Reports
   are grouped into strikes when the state is asked for, with the number of channels, sides and
-  independent news outlets behind each. Next: GDELT and ACLED events, and photos placed on the map.
+  independent news outlets behind each. Photos of strike posts (`social/media.py`, table
+  `item_media`, files in `data/telegram/media`, served at `/api/media/{item}/{n}`): web page
+  posts by the strikes lane, posts from the logged in account by the live reader; photos and
+  video preview images only. Next: GDELT and ACLED events, and photos placed on the map.
 
 ## Social channels
 

@@ -21,7 +21,8 @@ class MessageMediaPhoto(NS):
 
 def _msg(i, text, **kw):
     return NS(id=i, message=text, date=kw.get("date", datetime.now(timezone.utc)), views=kw.get("views", 1000),
-              fwd_from=kw.get("fwd_from"), entities=kw.get("entities"), media=kw.get("media"))
+              fwd_from=kw.get("fwd_from"), entities=kw.get("entities"), media=kw.get("media"),
+              photo=kw.get("photo"), video=kw.get("video"))
 
 
 def test_message_to_post():
@@ -30,7 +31,7 @@ def test_message_to_post():
              entities=[MessageEntityUrl(offset=text.index("https://t.me/odesa"), length=len("https://t.me/odesa_local/77")),
                        MessageEntityUrl(offset=text.index("https://t.me/Some"), length=len("https://t.me/SomeBot")),
                        MessageEntityTextUrl(offset=0, length=6, url="https://t.me/s/Front_News")],
-             media=MessageMediaPhoto())
+             media=MessageMediaPhoto(), photo=NS(id=1))
     p = to_post(m, {42: "scoop_channel"})
     assert p["id"] == 5 and p["text"] == text and p["views"] == 1000
     assert p["forwarded_from"] == "scoop_channel"

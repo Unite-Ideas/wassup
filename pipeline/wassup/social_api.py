@@ -2,12 +2,27 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from . import db
+from .social import media as media_files
 from .social.telegram import handle_of
 
 router = APIRouter(prefix="/api/social")
+media_router = APIRouter(prefix="/api/media")
+
+
+@media_router.get("/{item_id}/{n}")
+def media(item_id: int, n: int) -> FileResponse:
+    """A photo saved from a post (social/media.py)."""
+    with db.connect() as conn:
+        row = conn.execute("SELECT path FROM item_media WHERE item_id = %s AND n = %s", (item_id, n)).fetchone()
+    root = media_files.media_dir().resolve()
+    path = (root / row["path"]).resolve() if row else None
+    if path is None or root not in path.parents or not path.is_file():
+        raise HTTPException(404, "no such photo")
+    return FileResponse(path, media_type="image/jpeg", headers={"Cache-Control": "public, max-age=604800"})
 
 
 @router.get("/accounts")

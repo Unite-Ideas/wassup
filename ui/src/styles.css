@@ -298,6 +298,10 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
 .strike-card .sc-warn { font: 10.5px var(--mono); color: var(--warn); }
 .strike-card .sc-source { font-size: 11px; color: var(--text-3); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .strike-card .sc-source a { font-family: var(--mono); }
+.strike-card .sc-photos { display: flex; gap: 4px; margin: 3px 0; flex-wrap: wrap; }
+.strike-card .sc-photos img { height: 86px; max-width: 136px; object-fit: cover; border-radius: 3px; border: 1px solid var(--line-2); display: block; }
+.tracks-panel .tp-photos { display: flex; gap: 4px; margin: 4px 0; }
+.tracks-panel .tp-photos img { height: 48px; width: 64px; object-fit: cover; border-radius: 2px; border: 1px solid var(--line-2); display: block; }
 .tracks-panel { position: absolute; top: 12px; left: 12px; width: 276px; background: rgba(10,15,22,.92); border: 1px solid var(--line-2); border-radius: 4px; z-index: 2; font-size: 12px; }
 .tracks-panel .tp-head { display: flex; justify-content: space-between; padding: 8px 12px; font: 600 10.5px var(--mono); letter-spacing: .16em; color: var(--text-2); cursor: pointer; }
 .tracks-panel .tp-track { padding: 4px 12px 8px; border-top: 1px solid var(--line); }

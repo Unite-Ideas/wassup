@@ -327,6 +327,12 @@ def run_strikes(conn: psycopg.Connection, llm=None, max_seconds: float = 240) ->
                 conn.commit()
                 done += 1
                 found += n
+    try:
+        from ..social.media import fetch_web_media
+        fetch_web_media(conn)
+    except Exception:
+        conn.rollback()
+        log.exception("strikes: could not save photos")
     if done:
         log.info("strikes: read %d posts, %d strikes placed%s", done, found,
                  "; left out: " + ", ".join(f"{k} {v}" for k, v in why.most_common()) if why else "")
@@ -409,6 +415,7 @@ def group_strikes(reports: list[dict], at: datetime) -> list[dict]:
         sides = sorted({x.get("lean") for x in p if x.get("lean")})
         news = max((r.get("news") or 0) for r in rs)
         confirmed = any(r["status"] == "confirmed" for r in rs)
+        photos = list(dict.fromkeys(u for r in rs for u in r.get("photos") or []))[:6]
         first = rs[0]
         out.append({
             "ids": [r["id"] for r in rs], "lat": e["lat"], "lon": e["lon"], "label": first["label"],
@@ -420,7 +427,7 @@ def group_strikes(reports: list[dict], at: datetime) -> list[dict]:
             "killed": max((x.get("killed") or 0) for x in p) or None, "injured": max((x.get("injured") or 0) for x in p) or None,
             "reports": len(rs), "channels": len(channels), "sides": sides, "news": news, "confirmed": confirmed,
             "corroborated": confirmed or len(channels) >= 2 or news >= 2,
-            "quote": p[0].get("quote"),
+            "quote": p[0].get("quote"), "photos": photos,
             "rough": all(x.get("placed_by") == "province" for x in p),  # only the province is known
             "sources": [{"handle": x.get("handle"), "channel": x.get("channel"), "lean": x.get("lean"),
                          "url": r["source_url"], "at": r["observed_at"].isoformat(), "quote": x.get("quote")}

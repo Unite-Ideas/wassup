@@ -11,6 +11,7 @@ from pydantic import BaseModel
 
 from . import db
 from .tracks.movement import daily_path, km
+from .social.media import photos_for
 from .tracks.strikes import group_strikes
 
 router = APIRouter(prefix="/api/tracks")
@@ -105,7 +106,7 @@ def state(track_id: int, at: datetime | None = None, compare_days: float = Query
 
 def _strikes(conn, track_id: int, at: datetime, days: float) -> dict:
     rows = conn.execute(
-        """SELECT o.id, o.observed_at, o.label, o.props, o.source_url, o.status, ST_Y(o.geom) AS lat, ST_X(o.geom) AS lon,
+        """SELECT o.id, o.observed_at, o.label, o.props, o.source_url, o.status, o.item_id, ST_Y(o.geom) AS lat, ST_X(o.geom) AS lon,
                   (SELECT count(DISTINCT coalesce(x.outlet, x.source_id::text)) FROM items x
                    JOIN sources sx ON sx.id = x.source_id AND sx.kind <> 'telegram'
                    WHERE i.story_id IS NOT NULL AND x.story_id = i.story_id) AS news
@@ -113,6 +114,8 @@ def _strikes(conn, track_id: int, at: datetime, days: float) -> dict:
            WHERE o.track_id = %s AND o.category = 'strike' AND o.status <> 'rejected'
              AND o.observed_at > %s AND o.observed_at <= %s""",
         (track_id, at - timedelta(days=days), at)).fetchall()
+    photos = photos_for(conn, [r["item_id"] for r in rows if r["item_id"]])
+    rows = [{**r, "photos": photos.get(r["item_id"], [])} for r in rows]
     events = group_strikes(rows, at)
     feats = [_feature(json.dumps({"type": "Point", "coordinates": [e["lon"], e["lat"]]}),
                       {"category": "strike", **{k: v for k, v in e.items() if k not in ("lat", "lon")}}) for e in events]
