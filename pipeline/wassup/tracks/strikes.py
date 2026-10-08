@@ -207,7 +207,9 @@ Post:
 strikes: every strike or attack the post reports as having happened, one per place: missile, drone, glide bomb,
 air strike, rocket or artillery fire, or explosions. Not: drones or missiles reported in flight or heading somewhere
 ("UAV past X towards Y", "missile course on Z"), threats, warnings, air raid alerts on their own, forecasts, ground
-fighting between troops, or strikes from months or years ago being remembered. For each:
+fighting between troops, or strikes from months or years ago being remembered. A post about the aftermath of an earlier
+strike (officials visiting the site, funerals, rescue work, a death toll updated days later) reports no new strike:
+include it only if the post says on which day it happened, with that date. For each:
 - place: the village, town or city, in English spelling (Ukrainian spelling for places in Ukraine), nominative
   form, without words like "village of". Not a province or country unless the post names nothing finer.
 - place_original: the same place exactly as the post writes it, in the nominative (dictionary) form
