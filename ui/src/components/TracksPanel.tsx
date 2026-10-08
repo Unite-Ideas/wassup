@@ -130,6 +130,7 @@ function Strikes({ state, onFocus, onChange }: { state: TrackState; onFocus: (ln
                   </button>
                   <span className="dimmer"> · {WEAPON[p.weapon] ?? p.weapon}, {String(p.outcome).replace("_", " ")}</span>
                   {!p.corroborated && <span className="tag" title="Only one channel has reported it so far">1 source</span>}
+                  {p.rough && <span className="tag" title="Only the province is given; shown on its main city">province</span>}
                 </div>
                 <div className="dimmer">
                   {[p.target, p.killed ? `${p.killed} killed` : "", p.injured ? `${p.injured} injured` : ""].filter(Boolean).join(" · ")}

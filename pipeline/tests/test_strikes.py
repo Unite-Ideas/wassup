@@ -42,6 +42,12 @@ def test_exact_spot_from_the_post():
     assert exact_spot("Prices rose 3.5, 4.25 percent", kyiv) is None
 
 
+def test_province_only_places():
+    from wassup.tracks.strikes import PROVINCE_ONLY
+    assert PROVINCE_ONLY.search("Ryazan Рязанщині") and PROVINCE_ONLY.search("Kharkiv Oblast")
+    assert not PROVINCE_ONLY.search("Kharkiv Харків") and not PROVINCE_ONLY.search("Shchastia Щастя")
+
+
 def test_prefilter():
     assert STRIKE.search("Explosions heard in Odesa")
     assert STRIKE.search("Вибухи у Запоріжжі")
@@ -66,7 +72,7 @@ def test_group_strikes_merges_reports_of_one_strike():
     assert first["channels"] == 3 and first["sides"] == ["Russia", "Ukraine"] and first["corroborated"]
     assert first["outcome"] == "hit" and first["news"] == 3 and first["killed"] == 1
     lone = next(e for e in events if e["ids"] == [5])
-    assert not lone["corroborated"] and lone["channels"] == 1
+    assert not lone["corroborated"] and lone["channels"] == 1 and not lone["rough"]
 
 
 class FakeLLM:

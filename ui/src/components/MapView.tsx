@@ -157,6 +157,7 @@ function strikeCard(raw: Record<string, unknown>): HTMLElement {
   const when = new Date(p.first).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
   const province = p.admin1 && !String(p.admin1).startsWith(String(p.label).slice(0, 5)) ? `, ${p.admin1}` : "";
   root.append(el("div", "sc-title", `${p.label}${province}`));
+  if (p.rough) root.append(el("div", "sc-warn", "Only the province is given; shown on its main city"));
   root.append(el("div", "sc-meta", [when, WEAPON[p.weapon] ?? p.weapon, OUTCOME[p.outcome] ?? p.outcome, p.attacker ? `by ${p.attacker}` : ""].filter(Boolean).join(" · ")));
   const toll = [p.target, p.killed ? `${p.killed} killed` : "", p.injured ? `${p.injured} injured` : ""].filter(Boolean).join(" · ");
   if (toll) root.append(el("div", "sc-meta", toll));

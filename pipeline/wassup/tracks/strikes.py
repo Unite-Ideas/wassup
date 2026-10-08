@@ -70,6 +70,9 @@ IMPACT = re.compile(r"влуч|попад|уражен|поражен|вибух
                     r"انفجار|غارة|قصف|استهداف|פיצוץ|נפילה|פגיעה", re.I)
 # OSINT channels often give the exact spot: "Coordinates: 50.4533461, 30.4356499".
 COORDS = re.compile(r"(?<![\d.])(-?\d{1,2}\.\d{3,})\s*[,;]\s*(-?\d{1,3}\.\d{3,})(?![\d.])")
+# "Рязанщина", "Kharkiv region": the post names a province, not a town. The strike is then put
+# on the province's main city and marked as only roughly placed.
+PROVINCE_ONLY = re.compile(r"щин[аиіуо]|\b(oblast|region|province|governorate|krai|област|облас|край|محافظة)", re.I)
 _PLACE_WORDS = {"village", "town", "city", "of", "the", "settlement", "district", "село", "селище", "місто", "город",
                 "поселок", "посёлок", "смт", "пгт", "м", "с", "г", "п", "selo", "smt", "al"}
 
@@ -340,6 +343,8 @@ def _store(conn, tracks: dict[str, int], it: dict, strikes: list[dict]) -> int:
         spot = exact_spot(it["text"], (where["lat"], where["lon"]))
         if spot:
             where = {**where, "lat": spot[0], "lon": spot[1], "how": "coordinates"}
+        elif PROVINCE_ONLY.search(f"{s['place']} {s.get('place_original') or ''}"):
+            where = {**where, "how": "province"}
         region = region_of(where["country"], where["lat"], where["lon"])
         if region is None or (where["name"], region) in seen:
             continue
@@ -355,7 +360,7 @@ def _store(conn, tracks: dict[str, int], it: dict, strikes: list[dict]) -> int:
             """INSERT INTO track_observations (track_id, observed_at, category, geom, label, props, source_url, item_id, confidence)
                VALUES (%s, %s, 'strike', ST_SetSRID(ST_MakePoint(%s, %s), 4326), %s, %s, %s, %s, %s)""",
             (tracks[region], when, where["lon"], where["lat"], s["place"].strip()[:80], Jsonb(props), it["url"], it["id"],
-             0.7 if where["how"] == "gazetteer" else 0.9))
+             {"gazetteer": 0.7, "province": 0.4}.get(where["how"], 0.9)))
         n += 1
     return n
 
@@ -404,6 +409,7 @@ def group_strikes(reports: list[dict], at: datetime) -> list[dict]:
             "reports": len(rs), "channels": len(channels), "sides": sides, "news": news, "confirmed": confirmed,
             "corroborated": confirmed or len(channels) >= 2 or news >= 2,
             "quote": p[0].get("quote"),
+            "rough": all(x.get("placed_by") == "province" for x in p),  # only the province is known
             "sources": [{"handle": x.get("handle"), "channel": x.get("channel"), "lean": x.get("lean"),
                          "url": r["source_url"], "at": r["observed_at"].isoformat(), "quote": x.get("quote")}
                         for r, x in list(zip(rs, p))[:6]],
