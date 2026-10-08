@@ -12,6 +12,7 @@ import NewsroomView from "./components/NewsroomView";
 import MapView, { type Overlay } from "./components/MapView";
 import TracksPanel from "./components/TracksPanel";
 import SourcesView from "./components/SourcesView";
+import InvestigateView from "./components/InvestigateView";
 
 const HOUR = 3600e3;
 const REFRESH_MS = 60_000;
@@ -216,6 +217,7 @@ export default function App() {
         )}
         {view === "newsroom" && <NewsroomView desks={deskMap} onSelectStory={selectStory} />}
         {view === "sources" && <SourcesView desks={deskMap} />}
+        {view === "investigate" && <InvestigateView />}
         {view === "board" && (
           <BoardView rootId={boardRoot ?? storyId} selectedId={storyId} desks={deskMap} onSelectStory={selectStory} onReRoot={setBoardRoot} />
         )}

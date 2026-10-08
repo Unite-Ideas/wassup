@@ -1,3 +1,4 @@
+import type { InvestigationDetail, InvestigationListItem } from "./types";
 import type { Brief, PlaceHit, Desk, Filters, GlobeData, GraphData, NewsroomAgent, NewsroomEvent, NewsroomStatus, PlaceDetail, Stats, Story, SocialAccount, StoryDetail, TimelineData, Track, TrackState } from "./types";
 
 async function get<T>(path: string, params?: Record<string, string | number | boolean | undefined>): Promise<T> {
@@ -13,7 +14,25 @@ export function filterParams(f: Filters, allDesks: string[]) {
   return { since: f.start.toISOString(), until: f.end.toISOString(), desks, cold: f.cold, min_sig: f.minSig };
 }
 
+async function post<T = { ok: boolean }>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(`/api${path}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail ?? `${res.status} on ${path}`);
+  return res.json() as Promise<T>;
+}
+
 export const api = {
+  investigations: () => get<InvestigationListItem[]>("/investigations"),
+  investigation: (id: number) => get<InvestigationDetail>(`/investigations/${id}`),
+  newInvestigation: (title: string, brief: string, links: string, watch_days: number) =>
+    post<{ id: number }>("/investigations", { title, brief, links, watch_days }),
+  investigationLinks: (id: number, links: string) => post<{ added: number }>(`/investigations/${id}/links`, { links }),
+  investigationText: (id: number, body: { text: string; url?: string; title?: string; author?: string }) =>
+    post<{ id: number }>(`/investigations/${id}/text`, body),
+  investigationEdit: (id: number, body: { title?: string; brief?: string; status?: string; watch_days?: number }) =>
+    post(`/investigations/${id}`, body),
+  investigationRefresh: (id: number) => post(`/investigations/${id}/refresh`, {}),
+  investigationSource: (id: number, sourceId: number, action: string) => post(`/investigations/${id}/sources/${sourceId}`, { action }),
+  investigationSourceText: (id: number, sourceId: number) => get<{ text: string }>(`/investigations/${id}/sources/${sourceId}/text`),
   desks: () => get<Desk[]>("/desks"),
   stats: () => get<Stats>("/stats"),
   globe: (p: ReturnType<typeof filterParams>) => get<GlobeData>("/globe", p),

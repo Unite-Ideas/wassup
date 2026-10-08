@@ -214,6 +214,34 @@ their public pages meanwhile, so nothing is missed. To watch it:
 `config/social.yaml`. Wassup only reads: it never posts, never opens files, and joins
 channels only, never groups. The login is kept in `data/telegram`; delete that folder to log out.
 
+## Investigations (the INVESTIGATE tab)
+
+For a story you want to get to the bottom of. Press **+ NEW INVESTIGATION**, name it, write what
+you want to know (your questions steer everything), paste the links you have (articles, YouTube
+videos, Telegram, X and Facebook posts, one per line) and press START. From then on, for as long
+as you chose to keep watching (two weeks by default), Wassup:
+
+1. Reads every link: article text, a video's transcript and description, a post. Facebook shows
+   only the start of a post without logging in; those are marked **partial**: use **paste its
+   text** to give Wassup the whole thing. Use **PASTE TEXT** for anything else you have.
+2. Finds related reports it already collected, in any language.
+3. Has the local model read each source: how it knows what it says (an eyewitness, someone
+   involved, an official statement, a primary document, a reporter's own reporting, or a rewrite
+   of someone else's), the evidence it mentions and whether the author saw it, the people and what
+   they are said to gain or lose, the claims, the denials, and which links it relies on.
+4. Follows those links toward the originals (the **CITED SOURCES** tab): the first report, the
+   documents, the post or video it all came from.
+5. Searches news worldwide, YouTube and your Telegram channels for more, every six hours.
+6. Writes a summary that answers your questions with numbered references to the sources, keeps
+   apart what was shown from what was only said, lists the evidence and who holds it, the people
+   and their interests as reported, a timeline, how the story came out, where accounts disagree,
+   and what is still unknown. It says "not reported" rather than guessing.
+
+Sources open on **FIRST-HAND**; **ALL, BY DATE** shows how the story spread. **pin** a source to
+make sure the summary uses it, **hide** one to leave it out, and **LOOK AGAIN** to search and
+summarise again now. The summary is the local model's reading of the sources: check the sources
+it cites before relying on it, especially about real people.
+
 ## Tuning what you see
 
 Everything you are likely to change lives in `config/` and is mounted into the container, so edits apply on restart (`docker compose restart app`), followed by `wassup retriage` for desk or interest changes.

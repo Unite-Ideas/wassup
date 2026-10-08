@@ -132,6 +132,46 @@ def to_post(msg, usernames: dict[int, str]) -> dict | None:
             "media": ["telegram:photo"] if getattr(msg, "photo", None) else ["telegram:video"] if getattr(msg, "video", None) else []}
 
 
+_reader: "LiveReader | None" = None  # the running reader, for calls from other threads
+
+
+def _call(make, timeout: float = 60):
+    """Run a coroutine on the live reader's own event loop and wait for it (None when not running)."""
+    r = _reader
+    if r is None or r.client is None or getattr(r, "loop", None) is None or not r.loop.is_running():
+        return None
+    return asyncio.run_coroutine_threadsafe(make(r), r.loop).result(timeout)
+
+
+def read_post(handle: str, post_id: int) -> dict | None:
+    """One post, through the logged in account (for posts with no public page)."""
+    async def go(r):
+        m = await r.client.get_messages(handle, ids=post_id)
+        return to_post(m, r.usernames) if m else None
+    try:
+        return _call(go)
+    except Exception as e:
+        log.debug("read_post %s/%s: %s", handle, post_id, e)
+        return None
+
+
+def search_posts(query: str, since, limit: int = 40) -> list[dict]:
+    """Channel posts matching a query, among the channels the account has joined (Telegram's
+    own search). Groups are left out."""
+    async def go(r):
+        from telethon.tl.types import Channel
+        out = []
+        async for m in r.client.iter_messages(None, search=query, limit=limit):
+            if m.date < since:
+                break
+            chat = await m.get_chat()
+            if isinstance(chat, Channel) and chat.broadcast and chat.username:
+                out.append({"url": f"https://t.me/{chat.username}/{m.id}", "title": (m.message or "")[:200],
+                            "outlet": f"Telegram: @{chat.username}"})
+        return out
+    return _call(go, timeout=120) or []
+
+
 class LiveReader:
     def __init__(self):
         self.client = None
@@ -152,7 +192,10 @@ class LiveReader:
     async def _main(self) -> None:
         from telethon import events
 
+        global _reader
         self.client = _client()
+        self.loop = asyncio.get_running_loop()
+        _reader = self
         await self.client.connect()
         if not await self.client.is_user_authorized():
             log.warning("Telegram keys are set but the account is not logged in: run `wassup telegram login`")

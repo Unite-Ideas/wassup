@@ -433,3 +433,48 @@ CREATE TABLE IF NOT EXISTS social_mentions (
 ALTER TABLE social_accounts ADD COLUMN IF NOT EXISTS via text NOT NULL DEFAULT 'web';   -- web | api
 ALTER TABLE social_accounts ADD COLUMN IF NOT EXISTS tg_id bigint;
 CREATE INDEX IF NOT EXISTS social_accounts_tg_idx ON social_accounts (tg_id) WHERE tg_id IS NOT NULL;
+
+-- Investigations: a story you want to get to the bottom of (investigate/). You give links and
+-- what you want to know; Wassup reads them, finds related reports, follows what each cites back
+-- toward the originals, searches for more, and keeps an evidence-based summary.
+CREATE TABLE IF NOT EXISTS investigations (
+    id              serial PRIMARY KEY,
+    title           text NOT NULL,
+    brief           text NOT NULL DEFAULT '',       -- what you want to know
+    status          text NOT NULL DEFAULT 'active', -- active | paused | done
+    watch_until     timestamptz,
+    queries         jsonb NOT NULL DEFAULT '[]'::jsonb,
+    summary         jsonb,
+    summary_at      timestamptz,
+    summary_sources integer NOT NULL DEFAULT 0,     -- relevant sources the summary was written from
+    related_at      timestamptz,
+    searched_at     timestamptz,
+    meta            jsonb NOT NULL DEFAULT '{}'::jsonb,
+    created_at      timestamptz NOT NULL DEFAULT now(),
+    updated_at      timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS investigation_sources (
+    id              bigserial PRIMARY KEY,
+    investigation_id integer NOT NULL REFERENCES investigations(id) ON DELETE CASCADE,
+    url             text NOT NULL,
+    item_id         bigint REFERENCES items(id) ON DELETE SET NULL,
+    kind            text NOT NULL DEFAULT 'article', -- article | youtube | telegram | x | facebook | document | pasted
+    found_by        text NOT NULL,                  -- you | wassup | search | traced
+    parent_id       bigint REFERENCES investigation_sources(id) ON DELETE SET NULL,  -- the source that cited it
+    depth           integer NOT NULL DEFAULT 0,
+    status          text NOT NULL DEFAULT 'pending', -- pending | fetched | analyzed | unrelated | failed
+    title           text,
+    outlet          text,
+    author          text,
+    published_at    timestamptz,
+    thumbnail       text,
+    similarity      real,
+    analysis        jsonb,
+    meta            jsonb NOT NULL DEFAULT '{}'::jsonb,
+    error           text,
+    pinned          boolean NOT NULL DEFAULT false,
+    hidden          boolean NOT NULL DEFAULT false,
+    created_at      timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (investigation_id, url)
+);
+CREATE INDEX IF NOT EXISTS investigation_sources_status_idx ON investigation_sources (investigation_id, status);

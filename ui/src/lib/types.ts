@@ -1,4 +1,4 @@
-export type View = "globe" | "map" | "board" | "newsroom" | "sources";
+export type View = "globe" | "map" | "board" | "newsroom" | "sources" | "investigate";
 
 export type Tier = "A" | "B" | "C" | "S" | "U";
 
@@ -327,4 +327,77 @@ export interface SocialAccount {
   last_error: string | null;
   last_post_at: string | null;
   via?: "web" | "api";
+}
+
+export interface InvestigationListItem {
+  id: number;
+  title: string;
+  brief: string;
+  status: "active" | "paused" | "done";
+  watch_until: string | null;
+  created_at: string;
+  updated_at: string;
+  summary_at: string | null;
+  sources: number;
+  relevant: number;
+  waiting: number;
+  firsthand: number;
+}
+
+export interface SourceAnalysis {
+  relevant: boolean;
+  account: string;
+  summary: string;
+  relies_on: string[];
+  evidence: { what: string; kind: string; held_by: string; seen_by_source: boolean; checked_by: string; quote: string }[];
+  people: { name: string; role: string; stance: string; interest: string; quote: string }[];
+  claims: { claim: string; who_says: string; quote: string }[];
+  responses: { who: string; response: string; quote: string }[];
+  dates: { date: string; what: string }[];
+}
+
+export interface InvestigationSource {
+  id: number;
+  url: string;
+  kind: string;
+  found_by: "you" | "wassup" | "search" | "traced";
+  parent_id: number | null;
+  depth: number;
+  status: "pending" | "fetched" | "analyzed" | "unrelated" | "failed";
+  title: string | null;
+  outlet: string | null;
+  author: string | null;
+  published_at: string | null;
+  thumbnail: string | null;
+  similarity: number | null;
+  analysis: SourceAnalysis | null;
+  error: string | null;
+  pinned: boolean;
+  hidden: boolean;
+  partial: boolean | null;
+  pasted: boolean | null;
+  duration: number | null;
+  story_id: number | null;
+  chars: number;
+}
+
+type Refs = { sources: number[] };
+export interface InvestigationSummary {
+  headline: string;
+  answers: ({ question: string; answer: string; confidence: "low" | "medium" | "high" } & Refs)[];
+  evidence: ({ what: string; held_by: string; status: string; detail: string } & Refs)[];
+  people: ({ name: string; role: string; position: string; interest: string } & Refs)[];
+  timeline: ({ date: string; what: string } & Refs)[];
+  origin: string;
+  disagreements: ({ about: string; sides: string } & Refs)[];
+  open_questions: string[];
+  source_ids: Record<string, number>;
+}
+
+export interface InvestigationDetail extends Omit<InvestigationListItem, "sources"> {
+  summary: InvestigationSummary | null;
+  summary_sources: number;
+  queries: { query: string; language: string }[];
+  searched_at: string | null;
+  sources: InvestigationSource[];
 }

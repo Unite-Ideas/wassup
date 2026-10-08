@@ -16,6 +16,7 @@ dependencies = [
     "pmtiles>=3.4",
     "trafilatura>=2.0",
     "telethon>=1.36",
+    "yt-dlp>=2025.1.1",
 ]
 
 [project.optional-dependencies]

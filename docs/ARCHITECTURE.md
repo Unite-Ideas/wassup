@@ -274,6 +274,19 @@ Phase 0 implementation notes:
   posts by the strikes lane, posts from the logged in account by the live reader; photos and
   video preview images only. Next: GDELT and ACLED events, and photos placed on the map.
 
+## Investigations
+
+- `pipeline/wassup/investigate/`: `fetch.py` reads a link of any kind into one shape (text,
+  date, author, outlet, thumbnail, and the links the source itself gives): articles with
+  trafilatura (the date in the address wins over a page template's), YouTube with yt-dlp
+  (description and the spoken language's transcript), Telegram posts from their embed page or
+  the logged in account, X posts through fxtwitter, Facebook through its link preview (partial).
+  `core.py` is the investigate lane: fetch, related items (same stories and nearest bge-m3
+  vectors), per source analysis by the local model, citation tracing (two steps), outward
+  search (GDELT DOC API, YouTube search, Telegram global search of joined channels) and the
+  summary. Tables `investigations` and `investigation_sources`; read sources become items with
+  their full text, so they join stories like anything else.
+
 ## Social channels
 
 - **Telegram** (`pipeline/wassup/social/telegram.py`): public channels read from t.me/s pages
