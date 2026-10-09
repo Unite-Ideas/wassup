@@ -167,6 +167,22 @@ class Gazetteer:
                 for n in {row["name"], row["asciiname"]}:
                     if len(n) >= 4 and n not in SKIP_CITY_NAMES and n not in names:
                         names[n] = p  # cities are sorted by population, so the biggest wins
+        # Short forms headlines use: "New York" for New York City, "Ho Chi Minh" for Ho Chi Minh City,
+        # "St. Petersburg" for Saint Petersburg. Never over a country or a bigger city of that name
+        # (cities are sorted biggest first).
+        rank = {c.key: i for i, c in enumerate(self.cities)}
+        for p in self.cities:
+            alts = []
+            if p.name.endswith(" City") and len(p.name) > 9:
+                alts.append(p.name[:-5])
+            if p.name.startswith("Saint "):
+                alts += ["St. " + p.name[6:], "St " + p.name[6:]]
+            elif p.name.startswith(("St. ", "St ")):
+                alts.append("Saint " + p.name.split(" ", 1)[1])
+            for a in alts:
+                have = names.get(a)
+                if a not in SKIP_CITY_NAMES and (have is None or (have.kind == "city" and rank.get(have.key, 0) > rank[p.key])):
+                    names[a] = p
         for landmark, iso in LANDMARKS.items():
             if iso in capitals:
                 names[landmark] = capitals[iso]

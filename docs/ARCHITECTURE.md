@@ -312,6 +312,17 @@ Phase 0 implementation notes:
   (`desk_review_none`), recorded in `stories.desk_review` with the main country. Triage keeps the
   review until the story doubles in size.
 
+## Accuracy audits
+
+- `quality/audit.py`: a nightly random sample (`audit_checks`, aspects desk, missed, place,
+  grouping, importance, link), a text sheet for the judge, verdicts applied (desk moves, missed
+  stories routed, places set, stray articles detached with `cluster.detach_item`, which records a
+  `story_splits` pair the merge pass respects), and the scorecard.
+- `quality/run.py`: the audit lane; the Standards Editor (Paperclip, `claude_local`,
+  `standards_instructions.md`) judges through `/api/audits/N/sheet`, `/verdicts`, `/finish`, or the
+  local model in batches of ten. Unfinished Claude audits fall back to the local model after 8 hours.
+- Your reports (`/api/stories/N/report`, and location fixes) are `audit_checks` with no audit.
+
 ## Social channels
 
 - **Telegram** (`pipeline/wassup/social/telegram.py`): public channels read from t.me/s pages

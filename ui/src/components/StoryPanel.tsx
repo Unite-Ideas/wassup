@@ -48,7 +48,7 @@ function Codes({ list }: { list: string[] }) {
   return <>{list.map((k) => <code key={k} style={{ marginRight: 4 }}>{k}</code>)}</>;
 }
 
-function ItemRow({ it }: { it: Item & { copies: number } }) {
+function ItemRow({ it, storyId, onChanged }: { it: Item & { copies: number }; storyId: number; onChanged: () => void }) {
   const [text, setText] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const toggle = () => {
@@ -72,7 +72,39 @@ function ItemRow({ it }: { it: Item & { copies: number } }) {
       {it.has_text && (
         <button className="read-toggle" onClick={toggle}>{open ? "Hide article" : "Read full article"}</button>
       )}
+      <button className="read-toggle stray" title="This article is about something else: take it out into a story of its own"
+        onClick={() => { if (confirm("Take this article out of the story? It becomes a story of its own and is never merged back.")) api.storyReport(storyId, { aspect: "grouping", item_id: it.id }).then(onChanged).catch(() => undefined); }}>
+        Doesn't belong here
+      </button>
       {open && <div className="article-text">{text == null ? "Loading..." : text.split(/\n+/).map((para, i) => <p key={i}>{para}</p>)}</div>}
+    </div>
+  );
+}
+
+function DeskFix({ story, desks, onChanged }: { story: StoryDetail; desks: Map<string, Desk>; onChanged: () => void }) {
+  const [open, setOpen] = useState(false);
+  const report = (body: { aspect: "desk" | "importance"; answer: string }) =>
+    api.storyReport(story.id, body).then(() => { setOpen(false); onChanged(); }).catch(() => undefined);
+  return (
+    <div className="desk-fix mono">
+      <button className="linkish" onClick={() => setOpen(!open)}>{open ? "Cancel" : "Wrong desk or ranking?"}</button>
+      {open && (
+        <div className="desk-fix-body">
+          <div className="dim">Belongs on:</div>
+          <div className="chips">
+            {[...desks.values()].filter((d) => d.key !== story.desk).map((d) => (
+              <button key={d.key} className="chip" style={{ color: d.color, borderColor: d.color }} onClick={() => report({ aspect: "desk", answer: d.key })}>{d.name}</button>
+            ))}
+            {story.routed && <button className="chip" onClick={() => report({ aspect: "desk", answer: "none" })}>No desk (cold storage)</button>}
+          </div>
+          <div className="dim" style={{ marginTop: 6 }}>Ranked:</div>
+          <div className="chips">
+            <button className="chip" onClick={() => report({ aspect: "importance", answer: "too_high" })}>too high</button>
+            <button className="chip" onClick={() => report({ aspect: "importance", answer: "too_low" })}>too low</button>
+          </div>
+          <div className="dimmer" style={{ marginTop: 4 }}>Fixed now, and counted on the QUALITY scorecard.</div>
+        </div>
+      )}
     </div>
   );
 }
@@ -146,6 +178,15 @@ export default function StoryPanel({ story, loading, desks, onClose, onSelectSto
           {t.matched?.keywords?.length ? <> · matched <Codes list={t.matched.keywords.slice(0, 6)} /></> : null}
           {t.matched?.themes?.length ? <> · themes <Codes list={t.matched.themes.slice(0, 3)} /></> : null}
           {t.excluded && story.routed ? <> · overrides the <code>{t.excluded}</code> filter because it ties to a larger story</> : null}
+          {story.desk_review && (
+            <div className="dimmer mono" style={{ fontSize: 10.5, marginTop: 6 }}>
+              {story.desk_review.by === "you" ? "desk set by you" : story.desk_review.by ? `desk checked by the ${story.desk_review.by === "claude" ? "Standards Editor" : "audit"}`
+                : "second look by the model"}: {story.desk_review.desk
+                ? (story.desk_review.was && story.desk_review.was !== story.desk_review.desk ? `moved from ${desks.get(story.desk_review.was)?.name ?? story.desk_review.was}` : "confirmed")
+                : "not about any desk"}{story.desk_review.country ? ` · mainly about ${story.desk_review.country}` : ""}
+            </div>
+          )}
+          <DeskFix story={story} desks={desks} onChanged={onChanged} />
           <div className="dimmer mono" style={{ fontSize: 10.5, marginTop: 6 }}>
             decided by {t.backend ?? "unknown"}{t.confidence != null ? ` · confidence ${(t.confidence * 100).toFixed(0)}%` : ""}
             {t.learned ? ` · your feedback ${t.learned > 0 ? "+" : ""}${t.learned}` : ""}
@@ -198,7 +239,7 @@ export default function StoryPanel({ story, loading, desks, onClose, onSelectSto
                 </div>
               </div>
             )}
-            {items.map((it) => <ItemRow key={it.id} it={it} />)}
+            {items.map((it) => <ItemRow key={it.id} it={it} storyId={story.id} onChanged={onChanged} />)}
           </>
         )}
 

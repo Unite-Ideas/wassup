@@ -38,3 +38,8 @@ investigator:
   review_hours: 12                 # looks again at an active investigation this often, if there is new material
   max_runs_per_day: 6              # all investigations together, at most (your own requests included)
   budget_monthly_usd: 0            # 0 means no limit beyond your subscription
+
+standards_editor:
+  name: Standards Editor           # judges the nightly accuracy audit (QUALITY tab), on Claude Code
+  model: claude-sonnet-5-5
+  budget_monthly_usd: 0

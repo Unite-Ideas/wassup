@@ -1,0 +1,11 @@
+# Accuracy audits: every night a random sample of the last day's decisions is checked, and the
+# QUALITY tab shows how often each kind is wrong. See docs/RUNNING.md, "How accurate is it?".
+judge: auto          # auto: the Standards Editor (Claude) when hired, else the local model | claude | local
+every_hours: 22      # one audit a day
+hours: 24            # stories from this many hours back are sampled
+per_desk: 6          # checks per desk: is the story on the right desk?
+missed: 20           # stories in cold storage: should they be on a desk?
+place: 25            # is the story's main place right?
+grouping: 10         # do all these articles belong in one story?
+importance: 15       # is the story ranked about right?
+link: 10             # is this connection between two stories real?

@@ -23,6 +23,7 @@ log = logging.getLogger(__name__)
 
 EIC_INSTRUCTIONS = Path(__file__).with_name("eic_instructions.md")
 INVESTIGATOR_INSTRUCTIONS = Path(__file__).parent.parent / "investigate" / "investigator_instructions.md"
+STANDARDS_INSTRUCTIONS = Path(__file__).parent.parent / "quality" / "standards_instructions.md"
 
 
 def connect(conn: psycopg.Connection, out=print) -> bool:
@@ -84,6 +85,27 @@ def _investigator_body(conn, cfg: dict, eic_id: str) -> dict:
     }
 
 
+def _standards_body(conn, cfg: dict, eic_id: str) -> dict:
+    st = cfg.get("standards_editor") or {}
+    wassup_url = os.environ.get("WASSUP_INTERNAL_URL", "http://app:8000")
+    return {
+        "name": st.get("name", "Standards Editor"), "role": "researcher", "title": "Standards Editor",
+        "reportsTo": eic_id,
+        "capabilities": "Judges the nightly accuracy audit of Wassup's desks, places, grouping, importance and connections, "
+                        "and fixes the mistakes it finds.",
+        "adapterType": "claude_local",
+        "adapterConfig": {
+            "model": st.get("model", "claude-sonnet-5-5"),
+            "cwd": "/paperclip/workspaces/wassup-standards",
+            "timeoutSec": 3600,
+            "maxTurnsPerRun": 120,
+            "env": {"WASSUP_URL": wassup_url, "WASSUP_TOKEN": config(conn)["wassup_token"]},
+        },
+        "runtimeConfig": {"heartbeat": {"enabled": False, "wakeOnDemand": True}},
+        "budgetMonthlyCents": int(float(st.get("budget_monthly_usd", 0)) * 100),
+    }
+
+
 def _desk_body(conn, desk: dict, eic_id: str, minutes: int) -> dict:
     return {
         "name": f"{desk['name']} Desk", "role": "researcher", "title": f"{desk['name']} desk",
@@ -125,8 +147,9 @@ def setup(conn: psycopg.Connection, out=print) -> dict:
             api_key = row["paperclip_api_key"]
             out(f"  updated {body['name']}")
         else:
-            if kind in ("eic", "investigator"):
-                text = (EIC_INSTRUCTIONS if kind == "eic" else INVESTIGATOR_INSTRUCTIONS).read_text(encoding="utf-8")
+            if kind in ("eic", "investigator", "standards"):
+                text = {"eic": EIC_INSTRUCTIONS, "investigator": INVESTIGATOR_INSTRUCTIONS,
+                        "standards": STANDARDS_INSTRUCTIONS}[kind].read_text(encoding="utf-8")
                 body = {**body, "instructionsBundle": {"entryFile": "AGENTS.md", "files": {"AGENTS.md": text}}}
             agent_id = pc.create_agent(company_id, body)["id"]
             api_key = pc.create_agent_key(agent_id)
@@ -140,6 +163,7 @@ def setup(conn: psycopg.Connection, out=print) -> dict:
     eic_id = ensure("eic", "eic", _eic_body(conn, cfg, company_id))
     save_config(conn, eic_agent_id=eic_id)
     ensure("investigator", "investigator", _investigator_body(conn, cfg, eic_id))
+    ensure("standards", "standards", _standards_body(conn, cfg, eic_id))
     minutes = int((cfg.get("desks") or {}).get("heartbeat_minutes", 60))
     tz = company.get("timezone", "UTC")
     desks = load_yaml("desks.yaml").get("desks", [])

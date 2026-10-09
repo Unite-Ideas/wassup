@@ -503,3 +503,37 @@ ALTER TABLE investigations ADD COLUMN IF NOT EXISTS ask_at timestamptz;
 -- country it is mainly about. Triage keeps it until the story doubles in size.
 ALTER TABLE stories ADD COLUMN IF NOT EXISTS desk_review jsonb;
 ALTER TABLE stories ADD COLUMN IF NOT EXISTS desk_reviewed_items integer;
+
+-- Accuracy audits (quality/): a nightly random sample of Wassup's decisions, judged by the
+-- Standards Editor (Claude) or the local model, and your own reports from the story panel.
+CREATE TABLE IF NOT EXISTS audits (
+    id              serial PRIMARY KEY,
+    judge           text NOT NULL,                  -- claude | local
+    status          text NOT NULL DEFAULT 'open',   -- open | done | expired
+    issue_id        text,
+    created_at      timestamptz NOT NULL DEFAULT now(),
+    finished_at     timestamptz
+);
+CREATE TABLE IF NOT EXISTS audit_checks (
+    id              bigserial PRIMARY KEY,
+    audit_id        integer REFERENCES audits(id) ON DELETE CASCADE,   -- null for your reports
+    aspect          text NOT NULL,                  -- desk | missed | place | grouping | importance | link
+    story_id        bigint REFERENCES stories(id) ON DELETE CASCADE,
+    subject         jsonb NOT NULL DEFAULT '{}'::jsonb,  -- what was decided, shown to the judge
+    verdict         text,                           -- right | wrong | unsure
+    answer          text,                           -- the right desk, place, articles that do not belong...
+    note            text,
+    fixed           boolean NOT NULL DEFAULT false,
+    by              text,                           -- claude | local | you
+    created_at      timestamptz NOT NULL DEFAULT now(),
+    judged_at       timestamptz
+);
+CREATE INDEX IF NOT EXISTS audit_checks_audit_idx ON audit_checks (audit_id, aspect);
+CREATE INDEX IF NOT EXISTS audit_checks_time_idx ON audit_checks (judged_at);
+-- Stories that must not be merged again: an article taken out of one story starts its own.
+CREATE TABLE IF NOT EXISTS story_splits (
+    a               bigint NOT NULL,
+    b               bigint NOT NULL,
+    created_at      timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (a, b)
+);

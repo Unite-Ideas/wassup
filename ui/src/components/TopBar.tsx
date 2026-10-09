@@ -74,6 +74,7 @@ export default function TopBar({ stats, view, onView, desks, onSelectStory }: Pr
         <button className={view === "newsroom" ? "on" : ""} onClick={() => onView("newsroom")}>NEWSROOM</button>
         <button className={view === "sources" ? "on" : ""} onClick={() => onView("sources")}>SOURCES</button>
         <button className={view === "investigate" ? "on" : ""} onClick={() => onView("investigate")}>INVESTIGATE</button>
+        <button className={view === "quality" ? "on" : ""} onClick={() => onView("quality")}>QUALITY</button>
       </div>
     </header>
   );

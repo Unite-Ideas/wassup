@@ -1,4 +1,4 @@
-export type View = "globe" | "map" | "board" | "newsroom" | "sources" | "investigate";
+export type View = "globe" | "map" | "board" | "newsroom" | "sources" | "investigate" | "quality";
 
 export type Tier = "A" | "B" | "C" | "S" | "U";
 
@@ -154,6 +154,7 @@ export interface NewsroomStatus {
 }
 
 export interface StoryDetail extends Story {
+  desk_review: { desk: string | null; was?: string | null; country?: string; sure?: boolean; by?: string } | null;
   triage: {
     backend?: string;
     confidence?: number;
@@ -428,4 +429,36 @@ export interface InvestigationLead {
   urls: string[];
   added_by: "investigator" | "you";
   updated_at: string;
+}
+
+export interface QualityAudit {
+  id: number;
+  judge: "claude" | "local";
+  status: string;
+  created_at: string;
+  finished_at: string | null;
+  aspects: Record<string, { checked: number; wrong: number; unsure: number }>;
+}
+
+export interface QualityMistake {
+  id: number;
+  audit_id: number | null;
+  aspect: string;
+  story_id: number | null;
+  story_title: string | null;
+  subject: Record<string, any>;
+  answer: string | null;
+  note: string | null;
+  fixed: boolean;
+  by: string;
+  judged_at: string;
+}
+
+export interface QualityData {
+  audits: QualityAudit[];
+  reports: Record<string, number>;
+  mistakes: QualityMistake[];
+  aspects: string[];
+  open: { id: number; judge: string; created_at: string; left: number } | null;
+  standards_editor: boolean;
 }

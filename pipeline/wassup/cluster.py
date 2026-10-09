@@ -323,9 +323,10 @@ def _merge(conn: psycopg.Connection, max_merges: int) -> int:
             r, c = np.nonzero(sims >= at)
             pairs += [(float(sims[a, b]), int(chunk[a]), int(pool[b])) for a, b in zip(r, c)]
     merged, gone = 0, set()
+    split = {(r["a"], r["b"]) for r in conn.execute("SELECT a, b FROM story_splits")}
     for sim, pa, pb in sorted(pairs, reverse=True):
         a, b = _index.ids[pa], _index.ids[pb]
-        if a in gone or b in gone or a == b:
+        if a in gone or b in gone or a == b or (min(a, b), max(a, b)) in split:
             continue
         # Each story may have drifted since this pass started; check again.
         if float(_index._vecs[pa] @ _index._vecs[pb]) < merge_needs(at, int(min(_index._counts[pa], _index._counts[pb]))):
@@ -357,6 +358,13 @@ def _absorb(conn: psycopg.Connection, keep: int, drop: int) -> None:
         "UPDATE newsroom_agents SET focus_story_id = %(k)s WHERE focus_story_id = %(d)s",
         "UPDATE location_corrections SET story_id = %(k)s WHERE story_id = %(d)s",
         "UPDATE tracks SET story_id = %(k)s WHERE story_id = %(d)s",
+        "UPDATE audit_checks SET story_id = %(k)s WHERE story_id = %(d)s",
+        # Stories kept apart from the dropped one stay apart from the one that absorbs it.
+        """INSERT INTO story_splits (a, b) SELECT least(%(k)s, CASE WHEN a = %(d)s THEN b ELSE a END),
+                  greatest(%(k)s, CASE WHEN a = %(d)s THEN b ELSE a END)
+           FROM story_splits WHERE (a = %(d)s OR b = %(d)s) AND %(k)s <> CASE WHEN a = %(d)s THEN b ELSE a END
+           ON CONFLICT DO NOTHING""",
+        "DELETE FROM story_splits WHERE a = %(d)s OR b = %(d)s",
         """INSERT INTO follows (story_id, agent_key, reason, active, created_at)
            SELECT %(k)s, agent_key, reason, active, created_at FROM follows WHERE story_id = %(d)s ON CONFLICT DO NOTHING""",
         """INSERT INTO escalations (story_id, paperclip_issue_id, created_at)
@@ -382,3 +390,27 @@ def rebuild_stories(conn: psycopg.Connection) -> int:
     conn.commit()
     _index.loaded_at = 0
     return n
+
+
+def detach_item(conn: psycopg.Connection, item_id: int) -> int | None:
+    """Take an article out of its story (it does not belong there) into a story of its own,
+    which is never merged back into the one it left. Returns the new story's id."""
+    it = conn.execute("SELECT id, story_id, title, published_at, embedding FROM items WHERE id = %s", (item_id,)).fetchone()
+    if not it or not it["story_id"]:
+        return None
+    old = it["story_id"]
+    if conn.execute("SELECT count(*) AS n FROM items WHERE story_id = %s", (old,)).fetchone()["n"] <= 1:
+        return old  # already alone
+    new = conn.execute("SELECT nextval('stories_id_seq') AS id").fetchone()["id"]
+    lock_stories(conn, [old])
+    conn.execute("INSERT INTO stories (id, title, centroid, item_count, first_seen, last_seen) VALUES (%s, %s, %s, 1, %s, %s)",
+                 (new, it["title"], it["embedding"], it["published_at"], it["published_at"]))
+    conn.execute("UPDATE items SET story_id = %s WHERE id = %s", (new, item_id))
+    conn.execute("INSERT INTO story_splits (a, b) VALUES (%s, %s) ON CONFLICT DO NOTHING", (min(old, new), max(old, new)))
+    # The story it left: its centre without this article, and decided again.
+    conn.execute("""UPDATE stories SET centroid = (SELECT avg(embedding) FROM items WHERE story_id = %(o)s AND embedding IS NOT NULL),
+                    triaged_item_count = 0 WHERE id = %(o)s""", {"o": old})
+    refresh_stories(conn, [old, new])
+    if _index.loaded_at:
+        _index.loaded_at = 0  # reload the in-memory index with the change
+    return new

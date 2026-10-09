@@ -303,6 +303,31 @@ the country the story is mainly about, which keeps a US story off Italy's list b
 paper covered it. Stories are looked at again when they double in size; your MORE and LESS always
 win. `DESK_REVIEW=off` in `.env` stops it.
 
+The second look also reads stories the rules left in cold storage, so a story they missed is
+brought onto the right desk, goes back a week, and when a story's dot rests on weak evidence in
+the wrong country it moves the dot to the right one.
+
+## How accurate is it? (the QUALITY tab)
+
+Every night Wassup takes a random sample of the last day's decisions (a few stories per desk,
+stories in cold storage, places, groupings, rankings and connections, about 110 checks) and has
+them judged. The judge is the **Standards Editor**, a newsroom agent on Claude Code (your
+subscription), when it is hired; otherwise the local model. Mistakes are fixed on the spot: a
+story on the wrong desk is moved, a missed story is brought back, a wrong place is moved, articles
+that do not belong are taken out. Importance and connections are measured, not changed yet.
+
+The QUALITY tab shows the error rate of each kind of decision in the last audit and over 30 days,
+with a trend line, and every mistake found with a link to its story. **RUN AN AUDIT NOW** starts
+one within two minutes. The sample sizes are in `config/quality.yaml`.
+
+Your own fixes count too. In the story panel: **Fix location** (as before), **Wrong desk or
+ranking?** under "Why it is here", and **Doesn't belong here** on any article in Sources, which
+takes it out into a story of its own that is never merged back. They are fixed at once and listed
+under "your reports".
+
+To hire the Standards Editor (once, after updating): `docker compose exec app wassup newsroom setup`.
+Each audit is one Claude run of a few minutes a night.
+
 After updating, re-score the last week of articles with the new place rules:
 `docker compose exec app wassup relocate`.
 

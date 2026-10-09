@@ -162,10 +162,10 @@ def run_triage(conn: psycopg.Connection, limit: int = 500, max_seconds: float = 
                 d.routed, d.excluded_reason = False, "learned_dislike"
             # The model's second look (review.py) holds until the story has doubled in size.
             rv, rv_items = by_id[ctx.id]["desk_review"], by_id[ctx.id]["desk_reviewed_items"]
-            if rv and rv.get("sure") and rv_items and by_id[ctx.id]["item_count"] < 2 * rv_items and d.routed:
+            if rv and rv.get("sure") and rv_items and by_id[ctx.id]["item_count"] < 2 * rv_items and d.excluded_reason in (None, "no_desk_match"):
                 if rv.get("desk"):
-                    d.desk = rv["desk"]
-                else:
+                    d.desk, d.routed, d.excluded_reason = rv["desk"], True, None
+                elif d.routed:
                     d.routed, d.excluded_reason = False, "desk_review_none"
             fb = feedback.get(ctx.id)
             if fb == -1:

@@ -1,4 +1,4 @@
-import type { InvestigationDetail, InvestigationListItem } from "./types";
+import type { InvestigationDetail, InvestigationListItem, QualityData } from "./types";
 import type { Brief, PlaceHit, Desk, Filters, GlobeData, GraphData, NewsroomAgent, NewsroomEvent, NewsroomStatus, PlaceDetail, Stats, Story, SocialAccount, StoryDetail, TimelineData, Track, TrackState } from "./types";
 
 async function get<T>(path: string, params?: Record<string, string | number | boolean | undefined>): Promise<T> {
@@ -21,6 +21,10 @@ async function post<T = { ok: boolean }>(path: string, body: unknown): Promise<T
 }
 
 export const api = {
+  storyReport: (id: number, body: { aspect: "desk" | "grouping" | "importance"; answer?: string; item_id?: number; note?: string }) =>
+    post<{ ok: boolean; fixed: boolean; new_story: number | null }>(`/stories/${id}/report`, body),
+  quality: (days = 30) => get<QualityData>("/quality", { days }),
+  auditNow: () => post("/quality/audit", {}),
   investigations: () => get<InvestigationListItem[]>("/investigations"),
   investigation: (id: number) => get<InvestigationDetail>(`/investigations/${id}`),
   newInvestigation: (title: string, brief: string, links: string, watch_days: number) =>

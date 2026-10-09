@@ -9,8 +9,12 @@ is mainly about.
 
 - A different desk moves the story there; "none" sends it to cold storage, marked so you can
   see why (include cold storage on the globe to find them).
+- Stories the rules left in cold storage (matching no desk) are looked at too, so a story they
+  missed is brought onto the right desk.
 - The country feeds the place lists: a story mainly about the US is not listed as being about
-  Italy because an Italian paper covered it.
+  Italy because an Italian paper covered it. When the story's dot rests on weak evidence (only
+  GDELT's tagger, or little of it) and is in another country, the dot moves to the story's
+  strongest place in the right country, or to the country itself.
 Triage keeps the review's desk until the story has doubled in size, then it is reviewed again.
 Your own MORE and LESS in the story panel always win.
 """
@@ -32,12 +36,15 @@ BATCH = 12
 PER_RUN = 60
 
 PENDING = """
-    SELECT s.id, coalesce(s.title_en, s.title) AS title, s.desk, s.item_count
-    FROM stories s
-    WHERE s.routed AND s.desk IS NOT NULL AND s.last_seen > now() - interval '2 days'
+    SELECT s.id, coalesce(s.title_en, s.title) AS title, s.desk, s.routed, s.item_count, s.location_locked,
+           s.location_source, s.location_confidence, p.country AS place_country
+    FROM stories s LEFT JOIN places p ON p.id = s.primary_place_id
+    WHERE s.last_seen > now() - interval '7 days'
+      AND ((s.routed AND s.desk IS NOT NULL)
+           OR (NOT s.routed AND s.excluded_reason = 'no_desk_match' AND s.item_count >= 2))
       AND (s.desk_reviewed_items IS NULL OR s.item_count >= 2 * s.desk_reviewed_items)
       AND NOT EXISTS (SELECT 1 FROM feedback f WHERE f.story_id = s.id)
-    ORDER BY s.significance DESC LIMIT %s"""
+    ORDER BY s.routed DESC, s.last_seen > now() - interval '1 day' DESC, s.significance DESC, s.item_count DESC LIMIT %s"""
 
 
 def schema(keys: list[str]) -> dict:
@@ -56,7 +63,7 @@ def schema(keys: list[str]) -> dict:
 def review_batch(llm, desks, stories: list[dict], headlines: dict[int, list[str]]) -> list[dict]:
     desk_lines = "\n".join(f"- {d.key}: {d.name}. {d.description}" for d in desks)
     story_lines = "\n".join(
-        f"[{i + 1}] {s['title']}" + "".join(f"\n    also: {h}" for h in headlines.get(s["id"], [])[:2] if h != s["title"])
+        f"[{i + 1}] {s['title']}" + ("" if s.get("routed", True) else "  (currently on no desk)") + "".join(f"\n    also: {h}" for h in headlines.get(s["id"], [])[:2] if h != s["title"])
         for i, s in enumerate(stories))
     prompt = f"""You sort news stories onto the desks of a news intelligence team.
 
@@ -98,7 +105,8 @@ def run_review(conn: psycopg.Connection, llm=None, max_seconds: float = 120) -> 
                  FROM items WHERE story_id = ANY(%s)) x WHERE rn <= 4""", ([s["id"] for s in stories],)):
         heads.setdefault(r["story_id"], []).append(r["t"])
     conn.commit()
-    started, done, moved, cold = time.time(), 0, 0, 0
+    started, done, moved, cold, rescued = time.time(), 0, 0, 0, 0
+    relocate: list[tuple[int, str]] = []
     for i in range(0, len(stories), BATCH):
         if time.time() - started > max_seconds:
             break
@@ -116,7 +124,13 @@ def run_review(conn: psycopg.Connection, llm=None, max_seconds: float = 120) -> 
             review = {"desk": desk, "was": s["desk"], "country": country if len(country) == 2 else "", "sure": bool(a.get("sure")),
                       "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
             # Only a confident answer moves a story; an unsure one is recorded and left alone.
-            if review["sure"] and desk != s["desk"]:
+            if not s["routed"]:
+                if review["sure"] and desk:
+                    rescued += 1
+                    writes.append((desk, True, None, Jsonb(review), s["item_count"], s["id"]))
+                else:
+                    writes.append((s["desk"], False, "no_desk_match", Jsonb(review), s["item_count"], s["id"]))
+            elif review["sure"] and desk != s["desk"]:
                 if desk:
                     moved += 1
                 else:
@@ -124,6 +138,8 @@ def run_review(conn: psycopg.Connection, llm=None, max_seconds: float = 120) -> 
                 writes.append((desk or s["desk"], desk is not None, None if desk else "desk_review_none", Jsonb(review), s["item_count"], s["id"]))
             else:
                 writes.append((s["desk"], True, None, Jsonb(review), s["item_count"], s["id"]))
+            if review["sure"] and review["country"] and _weak(s) and s["place_country"] and s["place_country"] != review["country"]:
+                relocate.append((s["id"], review["country"]))
         writes.sort(key=lambda w: w[-1])
         lock_stories(conn, [w[-1] for w in writes])
         with conn.cursor() as cur:
@@ -132,6 +148,34 @@ def run_review(conn: psycopg.Connection, llm=None, max_seconds: float = 120) -> 
                           updated_at = now() WHERE id = %s""", writes)
         conn.commit()
         done += len(writes)
+    moved_dots = sum(_move_dot(conn, sid, cc) for sid, cc in relocate)
+    conn.commit()
     if done:
-        log.info("desk review: %d stories checked, %d moved to another desk, %d to cold storage", done, moved, cold)
+        log.info("desk review: %d stories checked, %d moved to another desk, %d to cold storage, %d brought back from cold "
+                 "storage, %d dots moved to the right country", done, moved, cold, rescued, moved_dots)
     return done
+
+
+def _weak(s: dict) -> bool:
+    """A location resting on weak evidence: only GDELT's tagger, or little of the story's evidence."""
+    return not s["location_locked"] and (s["location_source"] == "tagger" or (s["location_confidence"] or 0) < 0.4)
+
+
+def _move_dot(conn, story_id: int, country: str) -> int:
+    """Put the story on its strongest place in the right country, or on the country itself."""
+    from ..collectors.base import _place_id
+    from ..geo import gazetteer
+    from ..locate import set_location
+
+    best = conn.execute(
+        """SELECT p.id FROM story_places sp JOIN places p ON p.id = sp.place_id
+           WHERE sp.story_id = %s AND p.country = %s AND sp.weight > 0 ORDER BY sp.weight DESC, (p.kind = 'country') LIMIT 1""",
+        (story_id, country)).fetchone()
+    place_id = best["id"] if best else None
+    if place_id is None:
+        c = gazetteer().country(country)
+        if c is None:
+            return 0
+        place_id = _place_id(conn, c, {})
+    set_location(conn, story_id, place_id, "review", 0.6)
+    return 1

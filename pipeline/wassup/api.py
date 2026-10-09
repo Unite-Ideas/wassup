@@ -8,6 +8,7 @@ from typing import Any
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from psycopg.types.json import Jsonb
 from pydantic import BaseModel
 
 from . import db
@@ -15,6 +16,7 @@ from .config import load_yaml, settings
 from .maps_api import router as maps_router
 from .newsroom.api import router as newsroom_router
 from .investigate.api import router as investigate_router
+from .quality.api import router as quality_router
 from .social_api import media_router
 from .social_api import router as social_router
 from .tracks_api import router as tracks_router
@@ -26,6 +28,7 @@ app.include_router(tracks_router)
 app.include_router(social_router)
 app.include_router(media_router)
 app.include_router(investigate_router)
+app.include_router(quality_router)
 app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
                    allow_methods=["*"], allow_headers=["*"])
 
@@ -183,7 +186,7 @@ def _neighbors(conn, story_id: int) -> list[dict]:
 @app.get("/api/stories/{story_id}")
 def story(story_id: int) -> dict:
     with db.connect() as conn:
-        s = conn.execute(f"SELECT {STORY_COLS}, s.triage FROM stories s WHERE s.id = %s", (story_id,)).fetchone()
+        s = conn.execute(f"SELECT {STORY_COLS}, s.triage, s.desk_review FROM stories s WHERE s.id = %s", (story_id,)).fetchone()
         if not s:
             raise HTTPException(404, "story not found")
         items = conn.execute(
@@ -346,6 +349,11 @@ def fix_location(story_id: int, body: LocationIn) -> dict:
         old = st["primary_place_id"]
         set_location(conn, story_id, None if body.off_map else place_id, "you",
                      remove_place_id=old if old and old != place_id else None, record=True)
+        if old != place_id:  # counts as a place mistake on the QUALITY scorecard
+            names = {r["id"]: r["name"] for r in conn.execute("SELECT id, name FROM places WHERE id = ANY(%s)", ([old, place_id],))}
+            conn.execute("""INSERT INTO audit_checks (aspect, story_id, subject, verdict, answer, fixed, by, judged_at)
+                            VALUES ('place', %s, %s, 'wrong', %s, true, 'you', now())""",
+                         (story_id, Jsonb({"place": names.get(old)}), "off the map" if body.off_map else names.get(place_id)))
         conn.commit()
     return {"ok": True}
 

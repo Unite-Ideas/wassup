@@ -13,6 +13,7 @@ import MapView, { type Overlay } from "./components/MapView";
 import TracksPanel from "./components/TracksPanel";
 import SourcesView from "./components/SourcesView";
 import InvestigateView from "./components/InvestigateView";
+import QualityView from "./components/QualityView";
 
 const HOUR = 3600e3;
 const REFRESH_MS = 60_000;
@@ -218,6 +219,7 @@ export default function App() {
         {view === "newsroom" && <NewsroomView desks={deskMap} onSelectStory={selectStory} />}
         {view === "sources" && <SourcesView desks={deskMap} />}
         {view === "investigate" && <InvestigateView />}
+        {view === "quality" && <QualityView onSelectStory={selectStory} />}
         {view === "board" && (
           <BoardView rootId={boardRoot ?? storyId} selectedId={storyId} desks={deskMap} onSelectStory={selectStory} onReRoot={setBoardRoot} />
         )}
