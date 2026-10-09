@@ -32,6 +32,14 @@ app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173", "http
 # Places with less evidence than this (a stray tag that contradicts the headline) are kept but
 # not shown on the map.
 MIN_PLACE_WEIGHT = 0.15
+# A story is "about" a place when it is the story's main place (or, for a country, the main place
+# is in it), or when the place carries at least this share of the story's place evidence. Other
+# stories only mention it. The desk review's reading of the main country overrides a weak share.
+ABOUT_SHARE = 0.3
+ABOUT = """(s.primary_place_id = p.id
+            OR (p.kind = 'country' AND pp.country = p.country)
+            OR (sp.weight >= {share} * (SELECT sum(x.weight) FROM story_places x WHERE x.story_id = s.id)
+                AND coalesce(s.desk_review->>'country', p.country, '') IN (p.country, '')))""".format(share=ABOUT_SHARE)
 
 STORY_COLS = """s.id, coalesce(s.title_en, s.title) AS title, s.title AS title_original, s.title_tier, s.desk, s.routed, s.excluded_reason, s.significance, s.relevance,
     s.breaking, s.velocity, s.lat, s.lon, s.item_count, s.source_count, s.country_count, s.language_count,
@@ -137,7 +145,9 @@ def globe(since: str | None = None, until: str | None = None, hours: float | Non
                        max(s.significance) max_significance, bool_or(s.breaking) breaking,
                        mode() WITHIN GROUP (ORDER BY s.desk) top_desk
                 FROM story_places sp JOIN stories s ON s.id = sp.story_id JOIN places p ON p.id = sp.place_id
-                WHERE {w.where} AND sp.weight > {MIN_PLACE_WEIGHT} GROUP BY p.id ORDER BY story_count DESC LIMIT 2000""", w.params).fetchall()
+                LEFT JOIN places pp ON pp.id = s.primary_place_id
+                WHERE {w.where} AND sp.weight > {MIN_PLACE_WEIGHT} AND {ABOUT}
+                GROUP BY p.id ORDER BY story_count DESC LIMIT 2000""", w.params).fetchall()
         ids = [s["id"] for s in stories]
         links = conn.execute(
             """SELECT a, b, kind, weight, evidence, created_by FROM story_links
@@ -213,10 +223,13 @@ def place(place_id: int, since: str | None = None, until: str | None = None, hou
         p = conn.execute("SELECT id, name, country, kind, lat, lon FROM places WHERE id = %s", (place_id,)).fetchone()
         if not p:
             raise HTTPException(404, "place not found")
+        # Stories about the place first, then those that only mention it.
         stories = conn.execute(
-            f"""SELECT {STORY_COLS}, sp.weight place_weight FROM story_places sp JOIN stories s ON s.id = sp.story_id
+            f"""SELECT {STORY_COLS}, sp.weight place_weight, {ABOUT} AS about
+                FROM story_places sp JOIN stories s ON s.id = sp.story_id JOIN places p ON p.id = sp.place_id
+                LEFT JOIN places pp ON pp.id = s.primary_place_id
                 WHERE sp.place_id = %(pid)s AND sp.weight > {MIN_PLACE_WEIGHT} AND {w.where}
-                ORDER BY s.breaking DESC, s.significance DESC, s.last_seen DESC LIMIT 300""",
+                ORDER BY {ABOUT} DESC, s.breaking DESC, s.significance DESC, s.last_seen DESC LIMIT 300""",
             {**w.params, "pid": place_id}).fetchall()
     return {**p, "stories": stories}
 

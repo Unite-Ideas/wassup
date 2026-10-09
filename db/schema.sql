@@ -499,3 +499,7 @@ ALTER TABLE investigations ADD COLUMN IF NOT EXISTS investigator_at timestamptz;
 ALTER TABLE investigations ADD COLUMN IF NOT EXISTS investigator_issue text;
 ALTER TABLE investigations ADD COLUMN IF NOT EXISTS ask_note text;          -- you asked the Investigator to look now
 ALTER TABLE investigations ADD COLUMN IF NOT EXISTS ask_at timestamptz;
+-- The local model's second look at which desk a story belongs on (triage/review.py), and which
+-- country it is mainly about. Triage keeps it until the story doubles in size.
+ALTER TABLE stories ADD COLUMN IF NOT EXISTS desk_review jsonb;
+ALTER TABLE stories ADD COLUMN IF NOT EXISTS desk_reviewed_items integer;

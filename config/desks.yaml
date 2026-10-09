@@ -8,6 +8,7 @@
 desks:
   - key: us_politics
     name: US Politics and Congress
+    description: "US federal politics: the White House, Congress, the Supreme Court, elections, parties, federal agencies and their fights. Not US crime or local news unless it becomes a national political story."
     color: "#4FA3FF"
     keywords: [congress, congressional, senate, senator, senators, "house of representatives", congressman, congresswoman, lawmakers, "white house", trump, vance, "supreme court", filibuster, impeachment, impeach, "executive order", cabinet, republicans, republican, democrats, democrat, gop, midterm, midterms, "speaker of the house", "house speaker", "government shutdown", appropriations, "senate vote", "house vote", hearing, subpoena, pentagon, "attorney general", doj, fbi, "secretary of state", hegseth, rubio]
     themes: [LEGISLATION, ELECTION, USPEC_POLITICS, TAX_FNCACT_PRESIDENT, EPU_POLICY_GOVERNMENT]
@@ -15,6 +16,7 @@ desks:
 
   - key: russia_ukraine
     name: Russia and Ukraine
+    description: "The war between Russia and Ukraine and everything tied to it: the front, strikes, diplomacy, sanctions, weapons, Russian and Ukrainian politics."
     color: "#FFC24F"
     keywords: [ukraine, ukrainian, ukrainians, kyiv, kiev, zelensky, zelenskyy, russia, russian, russians, kremlin, putin, moscow, donbas, donetsk, luhansk, crimea, kharkiv, zaporizhzhia, odesa, odessa, kherson, kursk, pokrovsk, lavrov, peskov, belousov, gerasimov, wagner, belarus, lukashenko, "black sea fleet", украина, россия, путин, зеленский, київ, україна]
     themes: [ARMEDCONFLICT, MILITARY, CEASEFIRE]
@@ -22,6 +24,7 @@ desks:
 
   - key: iran_mideast
     name: Iran and Middle East
+    description: "Iran, Israel and Palestine, Gaza, Lebanon, Syria, Iraq, Yemen and the Gulf: wars, militias, nuclear talks, regional diplomacy."
     color: "#FF5F56"
     keywords: [iran, iranian, tehran, khamenei, irgc, pezeshkian, araghchi, israel, israeli, gaza, hamas, hezbollah, houthi, houthis, yemen, lebanon, lebanese, syria, syrian, damascus, iraq, iraqi, baghdad, idf, netanyahu, "west bank", saudi, riyadh, hormuz, natanz, fordow, isfahan, "uranium enrichment", "nuclear deal", qatar, doha, ایران, اسرائیل, غزة, إيران]
     themes: [ARMEDCONFLICT, MILITARY, WMD, TERROR, CEASEFIRE]
@@ -29,6 +32,7 @@ desks:
 
   - key: un_international
     name: UN and International Bodies
+    description: "The UN and international bodies: Security Council, General Assembly, UN agencies, NATO, the EU as an institution, international courts, summits and treaties."
     color: "#3DDC97"
     keywords: ["united nations", "security council", "general assembly", guterres, unhcr, unicef, unrwa, "world health organization", "international criminal court", icc, icj, "world court", "nato summit", "nato allies", g7, g20, brics, iaea, wto, imf, "world bank", "european union", "european commission", "european council", "african union", asean, opec, treaty, summit, "un resolution", "peacekeepers", "peacekeeping", ambassador]
     themes: [UNGP, PEACEKEEPING, NEGOTIATIONS, SANCTIONS]
@@ -36,6 +40,7 @@ desks:
 
   - key: gov_releases
     name: Government Releases
+    description: "Government document releases and disclosures: declassified files (Epstein, JFK, UAP), FOIA releases, leaks, inspector general reports, unsealed court records."
     color: "#C77DFF"
     keywords: [epstein, maxwell, jfk, "kennedy files", "kennedy assassination", "rfk assassination", "mlk files", declassified, declassify, declassification, foia, "freedom of information", ufo, ufos, uap, uaps, aaro, "unidentified anomalous", "non-human", whistleblower, "classified documents", "document release", "documents released", "files released", unsealed, "national archives", "inspector general", "leaked documents", leaked, "flight logs", "grand jury"]
     themes: [LEAK, SURVEILLANCE, SECURITY_SERVICES, CORRUPTION]
@@ -43,6 +48,7 @@ desks:
 
   - key: migration
     name: Migration
+    description: "People on the move across borders: migrants, refugees, asylum, deportations, border enforcement, smuggling, shipwrecks, displacement by war or disaster, and migration policy. Not labour strikes, local crime or missing persons unless migration is the point of the story."
     color: "#2EC4D6"
     keywords: [migrant, migrants, migration, refugee, refugees, asylum, "asylum seekers", deportation, deportations, deported, deportees, "border patrol", "border crossing", "border crossings", "ice agents", "ice raids", "ice detention", "immigration and customs enforcement", immigration, immigrants, displaced, displacement, smugglers, smuggling, "boat capsized", shipwreck, "small boats", "channel crossing", unhcr, iom, frontex, "darien gap"]
     themes: [REFUGEES, IMMIGRATION, DISPLACED, BORDER]

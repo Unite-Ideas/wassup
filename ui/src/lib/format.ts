@@ -28,6 +28,7 @@ export const EXCLUDED_LABEL: Record<string, string> = {
   lifestyle: "Lifestyle",
   learned_dislike: "Learned from your feedback",
   you_dismissed: "You dismissed this",
+  desk_review_none: "The model's second look: not about any desk",
 };
 
 export const FALLBACK_COLOR = "#7b8794";

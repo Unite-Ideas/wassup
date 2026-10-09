@@ -285,6 +285,27 @@ make sure the summary uses it, **hide** one to leave it out, and **LOOK AGAIN** 
 summarise again now. The summary is the local model's reading of the sources: check the sources
 it cites before relying on it, especially about real people.
 
+## How stories get their place and desk
+
+**Place.** Every article's places are weighed: the headline counts most, GDELT's tags less (and
+less still further down the article, or when they contradict the headline), and the outlet's home
+country gets a small boost only when the article names it. A story's main place is the one with
+the most evidence. Clicking a place on the globe lists the stories **about** it (their main place
+is there, or it carries a real share of the evidence), and folds the ones that only mention it
+under **Also mention**. The globe's place counts use the same rule.
+
+**Desk.** Triage's rules (keywords and GDELT's topic tags) place most stories, and are sometimes
+sure when they should not be. So the local model takes a second look at every story on a desk, a
+dozen headlines at a time, with each desk's description (`config/desks.yaml`): it confirms the
+desk, moves the story to the right one, or sends it to cold storage if it fits none (shown as
+"The model's second look: not about any desk"; switch on cold storage to see them). It also names
+the country the story is mainly about, which keeps a US story off Italy's list because an Italian
+paper covered it. Stories are looked at again when they double in size; your MORE and LESS always
+win. `DESK_REVIEW=off` in `.env` stops it.
+
+After updating, re-score the last week of articles with the new place rules:
+`docker compose exec app wassup relocate`.
+
 ## Tuning what you see
 
 Everything you are likely to change lives in `config/` and is mounted into the container, so edits apply on restart (`docker compose restart app`), followed by `wassup retriage` for desk or interest changes.

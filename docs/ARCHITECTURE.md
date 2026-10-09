@@ -302,6 +302,16 @@ Phase 0 implementation notes:
   `/api/investigations/N/brief`, writes `investigation_leads`, adds sources (`found_by =
   investigator`) and saves its notes (`memo`).
 
+## Classification checks
+
+- **Place lists** (`api.py`, `ABOUT`): a story is about a place when it is the story's main place,
+  the main place is in that country, or the place has 30% of the story's place evidence and the
+  desk review's country does not say otherwise. Others are returned with `about = false`.
+- **Desk review** (`triage/review.py`): routed stories go to the local model in batches of 12
+  with the desk descriptions; a sure answer moves the story or sends it to cold storage
+  (`desk_review_none`), recorded in `stories.desk_review` with the main country. Triage keeps the
+  review until the story doubles in size.
+
 ## Social channels
 
 - **Telegram** (`pipeline/wassup/social/telegram.py`): public channels read from t.me/s pages

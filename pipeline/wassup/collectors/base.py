@@ -90,7 +90,8 @@ def weighted_places(it: RawItem, distrusted: set[str] | frozenset = frozenset())
     appear in the article: the first few count fully, later ones (often photo captions or
     asides) much less. A GDELT place that contradicts the headline's country, with nothing in
     the headline or summary backing it, is nearly ignored, as is one you have removed from
-    stories before. The outlet's home country gets a small boost.
+    stories before. The outlet's home country gets a small boost, but only for a place the
+    article itself names: an Italian paper writing about New York is not a story about Italy.
     """
     from ..geo import country_of_domain
 
@@ -119,7 +120,7 @@ def weighted_places(it: RawItem, distrusted: set[str] | frozenset = frozenset())
                 w = 0.1  # contradicts the headline, with nothing to back it up
             elif not supported and p.key in distrusted:
                 w *= 0.2
-        if home and p.country == home:
+        if home and p.country == home and (in_title or not tagged or p.name.lower() in text or p.country in text_countries):
             w += 0.3
         out.append((p, in_title, round(w, 3)))
     have = {p.key for p in it.places}

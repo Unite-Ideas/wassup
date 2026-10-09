@@ -25,6 +25,7 @@ from .social.telegram import TelegramCollector
 from .tracks.deepstate import DeepStateCollector
 from .tracks.movement import run_movements
 from .tracks.strikes import run_strikes
+from .triage.review import run_review
 from .tracks.control import run_control
 from .tracks.zones import run_zones
 from .investigate.core import run_investigations
@@ -58,7 +59,7 @@ LANES: list[tuple[str, list[tuple[str, float, Callable]]]] = [
     ("cluster", [("process", 5, process_new), ("merge", 300, merge_stories)]),
     ("translate", [("translate", 10, run_translate)]),
     ("read", [("read", 15, run_reader)]),
-    ("triage", [("triage", 15, run_triage)]),
+    ("triage", [("triage", 15, run_triage), ("desk review", 60, run_review)]),
     ("signals", [("breaking", 120, update_breaking), ("links", 600, update_links)]),
     ("locate", [("locate", 120, run_locate)]),
     ("newsroom", [("newsroom", 60, run_manager)]),

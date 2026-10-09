@@ -97,7 +97,8 @@ def learned_adjustment(centroid: np.ndarray, liked: np.ndarray | None, disliked:
 
 
 NEEDS_TRIAGE = """
-    SELECT id, coalesce(title_en, title) AS title, centroid, item_count, source_count, country_count FROM stories
+    SELECT id, coalesce(title_en, title) AS title, centroid, item_count, source_count, country_count,
+           desk_review, desk_reviewed_items FROM stories
     WHERE triaged_item_count = 0
        OR item_count >= triaged_item_count * 2
        OR item_count >= triaged_item_count + 10
@@ -159,6 +160,13 @@ def run_triage(conn: psycopg.Connection, limit: int = 500, max_seconds: float = 
             d.significance = round(max(0.0, min(5.0, d.significance + adj)), 2)
             if d.routed and adj <= -0.25 and d.significance < 4:
                 d.routed, d.excluded_reason = False, "learned_dislike"
+            # The model's second look (review.py) holds until the story has doubled in size.
+            rv, rv_items = by_id[ctx.id]["desk_review"], by_id[ctx.id]["desk_reviewed_items"]
+            if rv and rv.get("sure") and rv_items and by_id[ctx.id]["item_count"] < 2 * rv_items and d.routed:
+                if rv.get("desk"):
+                    d.desk = rv["desk"]
+                else:
+                    d.routed, d.excluded_reason = False, "desk_review_none"
             fb = feedback.get(ctx.id)
             if fb == -1:
                 d.routed, d.excluded_reason = False, "you_dismissed"

@@ -180,7 +180,7 @@ export interface PlaceDetail {
   kind: string;
   lat: number;
   lon: number;
-  stories: (Story & { place_weight: number })[];
+  stories: (Story & { place_weight: number; about: boolean })[];
 }
 
 export interface GraphNode {
