@@ -54,6 +54,14 @@ desks:
     themes: [REFUGEES, IMMIGRATION, DISPLACED, BORDER]
     countries: []
 
+  - key: shipping
+    name: Shipping and Trade
+    description: "How goods move around the world: container ships, tankers and bulk carriers, ports and canals, strait and chokepoint disruptions, air cargo and cargo airports, freight rail and railroads, trucking, logistics centres and warehouses, supply chain jams, border crossings for freight, customs, tariffs and trade disputes. Not passenger travel, airline service or migrants crossing borders, unless freight is the point of the story."
+    color: "#FF8C42"
+    keywords: [shipping, "shipping lane", "shipping lanes", "container ship", "container ships", "cargo ship", "cargo ships", containership, tanker, tankers, "oil tanker", vlcc, "bulk carrier", "dry bulk", freighter, "merchant vessel", "merchant ship", "shadow fleet", maersk, msc, "cma cgm", "hapag-lloyd", cosco, "evergreen marine", "ocean carriers", ports, seaport, "port of", "port authority", dockworkers, longshoremen, "port strike", "container terminal", "suez canal", "panama canal", "red sea shipping", "strait of hormuz", "bab el-mandeb", "malacca strait", chokepoint, "freight rates", "spot rates", "container rates", teu, teus, "air cargo", "air freight", "cargo plane", "cargo flights", fedex, "ups airlines", "ups cargo", dhl, "freight rail", "freight train", "freight trains", "freight railroad", "railroad merger", "railroad strike", railroads, "rail freight", "union pacific", bnsf, csx, "norfolk southern", "canadian national", cpkc, trucking, truckers, "truck drivers", "freight trucks", "logistics company", "logistics firms", "freight and logistics", "logistics hub", "logistics centre", "logistics center", "distribution center", "fulfillment center", "supply chain", "supply chains", "supply chain disruption", "port congestion", "freight backlog", "border crossing", "border crossings", "customs duties", "customs officials", "customs agency", tariff, tariffs, "trade war", "trade deal", "trade dispute", "import duties", "export controls", "export ban", embargo, "de minimis", ustr, "world trade organization"]
+    themes: [MARITIME, PIRACY, BLOCKADE, ECON_TRADE_DISPUTE, ECON_FREETRADE]
+    countries: []
+
   - key: world_watch
     name: World Watch
     color: "#A0AEC0"

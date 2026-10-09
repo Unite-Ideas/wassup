@@ -537,3 +537,105 @@ CREATE TABLE IF NOT EXISTS story_splits (
     created_at      timestamptz NOT NULL DEFAULT now(),
     PRIMARY KEY (a, b)
 );
+
+-- Shipping and trade (shipping/). Places in the world's freight network: ports and chokepoints
+-- (IMF PortWatch), airports (OurAirports), US land border crossings (CBP). stats holds the
+-- latest numbers, such as port calls this week against normal.
+CREATE TABLE IF NOT EXISTS logistics_sites (
+    id              serial PRIMARY KEY,
+    key             text UNIQUE NOT NULL,           -- pw:port325, pw:chokepoint1, oa:KMEM, cbp:250401
+    kind            text NOT NULL,                  -- port | chokepoint | airport | border
+    name            text NOT NULL,
+    country         text,                           -- ISO2 where known
+    lat             double precision NOT NULL,
+    lon             double precision NOT NULL,
+    rank            real NOT NULL DEFAULT 0,        -- size, for which to show when zoomed out
+    info            jsonb NOT NULL DEFAULT '{}'::jsonb,
+    stats           jsonb NOT NULL DEFAULT '{}'::jsonb,
+    updated_at      timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS logistics_sites_kind_idx ON logistics_sites (kind, rank DESC);
+-- Ships through each chokepoint per day (PortWatch, from satellite AIS), for the trend line.
+CREATE TABLE IF NOT EXISTS chokepoint_days (
+    key             text NOT NULL,
+    day             date NOT NULL,
+    counts          jsonb NOT NULL,                 -- total, container, tanker, dry_bulk, general_cargo, roro, capacity
+    PRIMARY KEY (key, day)
+);
+-- Freight railways (Natural Earth), drawn as map tiles straight from the database.
+CREATE TABLE IF NOT EXISTS rail_lines (
+    id              serial PRIMARY KEY,
+    geom            geometry(LineString, 3857) NOT NULL,
+    continent       text
+);
+CREATE INDEX IF NOT EXISTS rail_lines_geom_idx ON rail_lines USING gist (geom);
+-- Live ships from AISStream: the latest position and identity of each vessel.
+CREATE TABLE IF NOT EXISTS vessels (
+    mmsi            bigint PRIMARY KEY,
+    name            text,
+    imo             bigint,
+    callsign        text,
+    ship_type       smallint,                       -- AIS type: 70-79 cargo, 80-89 tanker
+    length_m        smallint,
+    destination     text,
+    eta             text,
+    draught         real,
+    lat             double precision,
+    lon             double precision,
+    sog             real,                           -- speed over ground, knots
+    cog             real,                           -- course over ground, degrees
+    heading         smallint,
+    nav_status      smallint,
+    pos_at          timestamptz,
+    static_at       timestamptz
+);
+CREATE INDEX IF NOT EXISTS vessels_pos_idx ON vessels (pos_at);
+CREATE INDEX IF NOT EXISTS vessels_ll_idx ON vessels (lon, lat);
+-- Where each cargo ship and tanker was, every 15 minutes, kept a week.
+CREATE TABLE IF NOT EXISTS vessel_track (
+    mmsi            bigint NOT NULL,
+    at              timestamptz NOT NULL,
+    lat             double precision NOT NULL,
+    lon             double precision NOT NULL,
+    sog             real,
+    PRIMARY KEY (mmsi, at)
+);
+CREATE INDEX IF NOT EXISTS vessel_track_at_idx ON vessel_track (at);
+-- Cargo planes in the air (OpenSky), latest position per aircraft.
+CREATE TABLE IF NOT EXISTS aircraft (
+    icao24          text PRIMARY KEY,
+    callsign        text,
+    operator        text,
+    origin_country  text,
+    lat             double precision,
+    lon             double precision,
+    alt_m           real,
+    speed_kt        real,
+    track           real,
+    on_ground       boolean,
+    seen_at         timestamptz NOT NULL
+);
+-- Disruptions to trade and transport: from the news (port closures, strikes, attacks on ships,
+-- blocked canals, closed borders, new tariffs) and from PortWatch (storms, quakes near ports).
+CREATE TABLE IF NOT EXISTS shipping_events (
+    id              bigserial PRIMARY KEY,
+    key             text UNIQUE NOT NULL,           -- story:123 | pw:1558059
+    story_id        bigint REFERENCES stories(id) ON DELETE CASCADE,
+    kind            text NOT NULL,                  -- see shipping/events.py KINDS
+    title           text NOT NULL,
+    summary         text,
+    place           text,
+    country         text,
+    lat             double precision,
+    lon             double precision,
+    severity        smallint NOT NULL DEFAULT 1,    -- 1 minor, 2 serious, 3 major
+    status          text NOT NULL DEFAULT 'ongoing',  -- ongoing | ended | threatened
+    source          text NOT NULL,                  -- news | portwatch
+    url             text,
+    started_at      timestamptz,
+    ended_at        timestamptz,
+    items           integer,                        -- story size when last read
+    info            jsonb NOT NULL DEFAULT '{}'::jsonb,
+    updated_at      timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS shipping_events_time_idx ON shipping_events (updated_at);

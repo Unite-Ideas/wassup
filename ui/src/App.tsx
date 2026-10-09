@@ -11,6 +11,7 @@ import TopBar from "./components/TopBar";
 import NewsroomView from "./components/NewsroomView";
 import MapView, { type Overlay } from "./components/MapView";
 import TracksPanel from "./components/TracksPanel";
+import ShippingPanel from "./components/ShippingPanel";
 import SourcesView from "./components/SourcesView";
 import InvestigateView from "./components/InvestigateView";
 import QualityView from "./components/QualityView";
@@ -33,8 +34,12 @@ export default function App() {
   const [view, setView] = useState<View>("globe");
   const [mapOpened, setMapOpened] = useState(false);
   const [overlays, setOverlays] = useState<Overlay[]>([]);
+  const [shipOverlays, setShipOverlays] = useState<Overlay[]>([]);
+  const allOverlays = useMemo(() => [...overlays, ...shipOverlays], [overlays, shipOverlays]);
+  const [mapView, setMapView] = useState<{ bbox: [number, number, number, number]; zoom: number } | null>(null);
+  const onMapView = useCallback((bbox: [number, number, number, number], zoom: number) => setMapView({ bbox, zoom }), []);
   const [mapFocus, setMapFocus] = useState<{ lng: number; lat: number; zoom: number; n: number } | null>(null);
-  const focusMap = useCallback((lng: number, lat: number) => setMapFocus((f) => ({ lng, lat, zoom: 9, n: (f?.n ?? 0) + 1 })), []);
+  const focusMap = useCallback((lng: number, lat: number, zoom = 9) => setMapFocus((f) => ({ lng, lat, zoom, n: (f?.n ?? 0) + 1 })), []);
   useEffect(() => { if (view === "map") setMapOpened(true); }, [view]);
   const [selection, setSelection] = useState<Selection>(null);
   const [boardRoot, setBoardRoot] = useState<number | null>(null);
@@ -212,8 +217,11 @@ export default function App() {
         {mapOpened && (
           <div style={{ position: "absolute", inset: 0, visibility: view === "map" ? "visible" : "hidden" }}>
             <MapView data={globe} desks={deskMap} selection={selection} storyDetail={story} visible={view === "map"}
-              overlays={overlays} onSelectStory={selectStory} focus={mapFocus} />
-            <TracksPanel timelineEnd={filters.end} onOverlays={setOverlays} onFocus={focusMap} />
+              overlays={allOverlays} onSelectStory={selectStory} focus={mapFocus} onView={onMapView} />
+            <div className="map-side">
+              <TracksPanel timelineEnd={filters.end} onOverlays={setOverlays} onFocus={focusMap} />
+              <ShippingPanel view={mapView} onOverlays={setShipOverlays} onFocus={focusMap} />
+            </div>
           </div>
         )}
         {view === "newsroom" && <NewsroomView desks={deskMap} onSelectStory={selectStory} />}

@@ -331,6 +331,18 @@ Each audit is one Claude run of a few minutes a night.
 After updating, re-score the last week of articles with the new place rules:
 `docker compose exec app wassup relocate`.
 
+## Shipping and trade (the SHIPPING AND TRADE panel on the MAP tab)
+
+A Shipping and Trade desk, and map layers for live cargo ships and tankers, cargo planes, the
+world's straits and canals and 2,000 ports with this week's traffic against normal, US border
+truck waits, airports, railways, and disruptions read from the news. Everything except live ships
+works with no setup. For live ships, add a free AISStream key to `.env` as
+`AISSTREAM_API_KEY=...` and run `docker compose up -d`. Full details, including the optional
+OpenSky account for planes every 2 minutes, in [SHIPPING.md](SHIPPING.md).
+
+The first start after updating downloads the port, airport and railway data (a few minutes).
+To put the new desk's stories on it: `docker compose exec app wassup retriage`.
+
 ## Tuning what you see
 
 Everything you are likely to change lives in `config/` and is mounted into the container, so edits apply on restart (`docker compose restart app`), followed by `wassup retriage` for desk or interest changes.
@@ -363,6 +375,8 @@ Thumbs up and down in the story panel (MORE and LESS) teach the relevance model 
 | `TRANSLATE_PARALLEL` | 3 | Translation batches sent to the model at once |
 | `GDELT_BACKFILL_FILES` | 16 | 15 minute files fetched on first start |
 | `CONGRESS_API_KEY` | (demo key) | Free from api.congress.gov |
+| `AISSTREAM_API_KEY` | (none) | Live ships on the map. Free from aisstream.io; see SHIPPING.md |
+| `OPENSKY_CLIENT_ID`, `OPENSKY_CLIENT_SECRET` | (none) | Optional: cargo planes every 2 minutes instead of 15 |
 
 ## Troubleshooting
 

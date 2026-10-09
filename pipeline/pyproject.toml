@@ -18,6 +18,7 @@ dependencies = [
     "telethon>=1.36",
     "yt-dlp>=2025.1.1",
     "pyshp>=2.3",
+    "websockets>=12",
 ]
 
 [project.optional-dependencies]

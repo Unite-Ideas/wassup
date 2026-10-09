@@ -51,6 +51,11 @@ def run_retention(conn: psycopg.Connection, batch: int = 20000, max_seconds: flo
     n = conn.execute("DELETE FROM newsroom_events WHERE created_at < now() - interval '90 days'").rowcount
     conn.commit()
     done += n
+    # Shipping disruptions long over, and chokepoint counts older than two years.
+    n = conn.execute("DELETE FROM shipping_events WHERE updated_at < now() - interval '180 days'").rowcount
+    n += conn.execute("DELETE FROM chokepoint_days WHERE day < now() - interval '730 days'").rowcount
+    conn.commit()
+    done += n
     if done:
         log.info("retention: cleared %d old vectors and events (older than %d days)", done, days)
     return done

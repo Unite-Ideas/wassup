@@ -30,6 +30,9 @@ from .quality.run import run_audits
 from .tracks.control import run_control
 from .tracks.zones import run_zones
 from .investigate.core import run_investigations
+from .shipping.events import run_events
+from .shipping.network import run_network
+from .shipping.planes import run_planes
 from .translate import run_translate
 from .triage import run_triage
 
@@ -69,6 +72,8 @@ LANES: list[tuple[str, list[tuple[str, float, Callable]]]] = [
     ("strikes", [("strikes", 30, run_strikes)]),
     ("control", [("control", 600, run_control), ("zones", 6 * 3600, run_zones)]),
     ("investigate", [("investigate", 15, run_investigations)]),
+    ("freight", [("freight network", 300, run_network)]),
+    ("shipping", [("cargo planes", 60, run_planes), ("shipping events", 60, run_events)]),
     ("upkeep", [("retention", 6 * 3600, run_retention), ("scout", 3600, run_scout)]),
 ]
 STEPS = [step for _, steps in LANES for step in steps]
@@ -112,6 +117,9 @@ def run_forever(collectors: list[Collector] | None = None) -> None:
     from .social.telegram_live import start_live
 
     start_live()  # posts the moment they are published, when a Telegram account is logged in
+    from .shipping.ais import start_ais
+
+    start_ais(stop)  # live ships, when AISSTREAM_API_KEY is set
     try:
         while not stop.wait(3600):
             pass

@@ -10,7 +10,7 @@ A global news intelligence system. Wassup collects news from around the world, f
 - **Groups** articles into stories with local multilingual embeddings (bge-m3 through Ollama), so the Farsi, Russian and English coverage of one event becomes one story.
 - **Translates** non English headlines into English with your local model, keeping the original alongside, so foreign coverage reads naturally and reaches the right desk.
 - **Places** every story on the map using GDELT's geotags and a bundled gazetteer of 250 countries and 2,500 cities.
-- **Triages** each story (not each article) into one of seven desks or cold storage. Rules decide most stories for free; a local LLM gives a second opinion only when the rules are unsure. Sports, celebrity and lifestyle news goes to cold storage unless it ties into a bigger story.
+- **Triages** each story (not each article) into one of eight desks or cold storage. Rules decide most stories for free; a local LLM gives a second opinion only when the rules are unsure. Sports, celebrity and lifestyle news goes to cold storage unless it ties into a bigger story.
 - **Rates sources**: primary and wire, independent, partisan, unrated, and state media. State media is always flagged and never picked as a headline when anyone else covers the story.
 - **Links** stories that share uncommon people or organizations, or that cover related ground, and flags **breaking** stories by how fast coverage is accelerating.
 - **Learns** from your thumbs up and down.
@@ -24,6 +24,10 @@ A global news intelligence system. Wassup collects news from around the world, f
 An Editor in Chief (Claude) and one agent per desk (your local model) check in on a schedule, write briefs, follow stories, and draw reasoned connections between desks, shown in gold on the globe. Breaking stories can get a temporary surge agent that tracks them every few minutes until they cool. A daily brief and an afternoon standup land on the NEWSROOM tab. Optional and off by default: see [docs/NEWSROOM.md](docs/NEWSROOM.md).
 
 Triage can also use [Jev](https://docs.typesafe.ai/introduction) (TypeSafe AI) for fast, calibrated decisions on the stories the keyword rules are unsure about. Set `TYPESAFE_API_KEY` in `.env`; spending is capped per day.
+
+## Shipping and trade
+
+A Shipping and Trade desk fed by 15 trade press feeds, and map layers for live cargo ships and tankers (AISStream), cargo planes (OpenSky), 28 straits and canals and 2,000 ports with this week's traffic against normal (IMF PortWatch), US border truck waits, airports, railways, and disruptions read from the news. See [docs/SHIPPING.md](docs/SHIPPING.md).
 
 ## Quick start (Windows 11)
 

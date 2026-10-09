@@ -446,3 +446,9 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
 .q-trend { color: var(--accent); }
 .q-mistake { padding: 8px 0; border-top: 1px solid var(--line); max-width: 980px; font-size: 12.5px; }
 .q-mistake .q-title { display: block; text-align: left; background: none; border: none; padding: 2px 0; color: var(--text); font: 600 13px var(--sans); cursor: pointer; }
+
+/* The map's left column: tracks, then shipping. */
+.map-side { position: absolute; top: 12px; left: 12px; width: 276px; max-height: calc(100% - 24px); overflow-y: auto; display: flex; flex-direction: column; gap: 8px; z-index: 2; }
+.map-side .tracks-panel { position: static; max-height: none; overflow: visible; flex-shrink: 0; }
+.strike-card .sc-spark { display: block; margin: 4px 0 0; }
+.shipping-panel .tp-side .linkish { color: var(--text-2); }

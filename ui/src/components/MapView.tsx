@@ -7,6 +7,7 @@ import type { GeometryCollection, Topology } from "topojson-specification";
 import countriesTopo from "world-atlas/countries-110m.json";
 import type { Desk, GlobeData, Selection, StoryDetail } from "../lib/types";
 import { deskColor } from "../lib/format";
+import { disruptionCard, planeCard, siteCard, vesselCard } from "./shippingCards";
 
 export interface MapInfo {
   world: { maxzoom: number; size_mb: number } | null;
@@ -21,6 +22,8 @@ export type OverlayLayer = LayerSpecification extends infer T ? (T extends unkno
 export interface Overlay {
   id: string;
   data: GeoJSON.FeatureCollection;
+  /** Vector tiles instead of data (layers then name their source-layer). */
+  tiles?: string[];
   layers: OverlayLayer[];
   /** Layer id under which the overlay is inserted, so stories stay on top. */
   before?: string;
@@ -37,7 +40,42 @@ interface Props {
   onMapClick?: (lngLat: [number, number], features: maplibregl.MapGeoJSONFeature[]) => void;
   /** Fly here when it changes (n makes repeated requests for the same spot count). */
   focus?: { lng: number; lat: number; zoom: number; n: number } | null;
+  /** The area in view, after each move: [west, south, east, north] and the zoom. */
+  onView?: (bbox: [number, number, number, number], zoom: number) => void;
 }
+
+/** Small icons drawn as signed distance fields, so each layer can colour them. */
+function shipIcon(): ImageData {
+  const size = 24;
+  const c = document.createElement("canvas");
+  c.width = c.height = size;
+  const g = c.getContext("2d")!;
+  g.translate(size / 2, size / 2);
+  g.beginPath();
+  g.moveTo(0, -10); g.lineTo(6, 8); g.lineTo(0, 4); g.lineTo(-6, 8);
+  g.closePath();
+  g.fillStyle = "#ffffff";
+  g.fill();
+  return g.getImageData(0, 0, size, size);
+}
+
+function planeIcon(): ImageData {
+  const size = 28;
+  const c = document.createElement("canvas");
+  c.width = c.height = size;
+  const g = c.getContext("2d")!;
+  g.translate(size / 2, size / 2);
+  g.fillStyle = "#ffffff";
+  g.beginPath();
+  g.moveTo(0, -12); g.lineTo(2, -4); g.lineTo(11, 2); g.lineTo(11, 4); g.lineTo(2, 1); g.lineTo(1.5, 8); g.lineTo(4, 10);
+  g.lineTo(4, 12); g.lineTo(0, 11); g.lineTo(-4, 12); g.lineTo(-4, 10); g.lineTo(-1.5, 8); g.lineTo(-2, 1); g.lineTo(-11, 4);
+  g.lineTo(-11, 2); g.lineTo(-2, -4);
+  g.closePath();
+  g.fill();
+  return g.getImageData(0, 0, size, size);
+}
+
+const SHIPPING = ["vessel", "plane", "disruption", "site-port", "site-chokepoint", "site-airport", "site-border"];
 
 // The Wassup palette on Protomaps' dark flavor: near black land, deep blue water.
 const FLAVOR: Flavor = { ...DARK, background: "#05080d", earth: "#0b121b", water: "#071a2b" };
@@ -291,14 +329,14 @@ function arrowCard(i: ArrowInfo, openStory: (id: number) => void): HTMLElement {
   return root;
 }
 
-export default function MapView({ data, desks, selection, storyDetail, visible, overlays, onSelectStory, onMapClick, focus }: Props) {
+export default function MapView({ data, desks, selection, storyDetail, visible, overlays, onSelectStory, onMapClick, focus, onView }: Props) {
   const box = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const [info, setInfo] = useState<MapInfo | null | undefined>(undefined);
   const [ready, setReady] = useState(false);
   const selectedId = selection?.type === "story" ? selection.id : null;
-  const latest = useRef({ onSelectStory, onMapClick });
-  latest.current = { onSelectStory, onMapClick };
+  const latest = useRef({ onSelectStory, onMapClick, onView });
+  latest.current = { onSelectStory, onMapClick, onView };
 
   useEffect(() => {
     fetch("/api/maps/info").then((r) => r.json()).then(setInfo).catch(() => setInfo(null));
@@ -315,6 +353,12 @@ export default function MapView({ data, desks, selection, storyDetail, visible, 
     m.addControl(new maplibregl.ScaleControl({ unit: "metric" }), "bottom-right");
     m.on("load", () => {
       m.addImage("track-arrow", arrowIcon(), { pixelRatio: 2 });
+      m.addImage("ship", shipIcon(), { pixelRatio: 2, sdf: true });
+      m.addImage("plane", planeIcon(), { pixelRatio: 2, sdf: true });
+      // The trail of the ship last clicked.
+      m.addSource("ship-path", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+      m.addLayer({ id: "ship-path", type: "line", source: "ship-path", layout: { "line-join": "round", "line-cap": "round" },
+                   paint: { "line-color": "#ffffff", "line-width": 1.6, "line-dasharray": [2, 1.5], "line-opacity": 0.8 } });
       m.addSource("stories", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
       STORY_LAYERS.forEach((l) => m.addLayer(l));
       setReady(true);
@@ -329,7 +373,7 @@ export default function MapView({ data, desks, selection, storyDetail, visible, 
     // Arrows and strikes can be clicked too: show it.
     m.on("mousemove", (e) => {
       if (popup.isOpen()) return;
-      const hit = m.queryRenderedFeatures(e.point).some((f) => ["strike", "place"].includes(f.properties?.category) || (f.properties?.category === "attack" && f.properties?.id));
+      const hit = m.queryRenderedFeatures(e.point).some((f) => ["strike", "place", ...SHIPPING].includes(f.properties?.category) || (f.properties?.category === "attack" && f.properties?.id));
       m.getCanvas().style.cursor = hit ? "pointer" : "";
     });
     m.on("click", (e) => {
@@ -339,6 +383,30 @@ export default function MapView({ data, desks, selection, storyDetail, visible, 
         return;
       }
       const all = m.queryRenderedFeatures(e.point);
+      const ship = all.find((f) => SHIPPING.includes(f.properties?.category));
+      if (ship) {
+        const p = ship.properties, cat = String(p.category);
+        const at = (ship.geometry as GeoJSON.Point).coordinates as [number, number];
+        const pop = new maplibregl.Popup({ className: "map-popup strike-popup", offset: 8, maxWidth: "340px" }).setLngLat(at);
+        const open = (id: number) => latest.current.onSelectStory(id);
+        const path = (coords: [number, number][]) => (m.getSource("ship-path") as GeoJSONSource | undefined)?.setData(
+          { type: "FeatureCollection", features: coords.length > 1 ? [{ type: "Feature", geometry: { type: "LineString", coordinates: coords }, properties: {} }] : [] });
+        if (cat === "plane") pop.setDOMContent(planeCard(p)).addTo(m);
+        else if (cat === "disruption") pop.setDOMContent(disruptionCard(p, open)).addTo(m);
+        else if (cat === "vessel") {
+          pop.setText("Looking up this ship…").addTo(m);
+          fetch(`/api/shipping/vessels/${p.mmsi}`).then((r) => r.json())
+            .then((v) => { pop.setDOMContent(vesselCard(v)); path(v.track ?? []); })
+            .catch(() => pop.setText("No recent details for this ship."));
+          pop.on("close", () => path([]));
+        } else {
+          pop.setText("Looking it up…").addTo(m);
+          fetch(`/api/shipping/sites/${p.id}`).then((r) => r.json())
+            .then((d) => pop.setDOMContent(siteCard(d, open)))
+            .catch(() => pop.setText("Could not load details."));
+        }
+        return;
+      }
       const arrow = all.find((f) => f.properties?.category === "attack" && f.properties?.id);
       if (arrow) {
         const at = (arrow.geometry as GeoJSON.Point).coordinates as [number, number];
@@ -370,6 +438,12 @@ export default function MapView({ data, desks, selection, storyDetail, visible, 
       }
       latest.current.onMapClick?.([e.lngLat.lng, e.lngLat.lat], all);
     });
+    const report = () => {
+      const b = m.getBounds();
+      latest.current.onView?.([b.getWest(), b.getSouth(), b.getEast(), b.getNorth()], m.getZoom());
+    };
+    m.on("moveend", report);
+    m.on("load", report);
     map.current = m;
     if (new URLSearchParams(location.search).has("debug")) (window as unknown as { wassupMap: maplibregl.Map }).wassupMap = m;
     return () => { m.remove(); map.current = null; setReady(false); };
@@ -411,12 +485,12 @@ export default function MapView({ data, desks, selection, storyDetail, visible, 
       shown.current.delete(id);
     }
     for (const o of overlays) {
-      const src = m.getSource(o.id) as GeoJSONSource | undefined;
+      const src = m.getSource(o.id);
       if (src) {
-        src.setData(o.data);
+        if (!o.tiles) (src as GeoJSONSource).setData(o.data);
         continue;
       }
-      m.addSource(o.id, { type: "geojson", data: o.data });
+      m.addSource(o.id, o.tiles ? { type: "vector", tiles: o.tiles, maxzoom: 14 } : { type: "geojson", data: o.data });
       const ids = o.layers.map((l) => {
         m.addLayer({ ...l, source: o.id } as LayerSpecification, o.before ?? "story-halo");
         return l.id;

@@ -77,6 +77,11 @@ services:
       TELEGRAM_API_ID: ${TELEGRAM_API_ID:-}
       TELEGRAM_API_HASH: ${TELEGRAM_API_HASH:-}
       TELEGRAM_PHONE: ${TELEGRAM_PHONE:-}
+      # Shipping layers (optional; see docs/SHIPPING.md): live ships from aisstream.io, and an
+      # OpenSky account for cargo planes every 2 minutes instead of every 15.
+      AISSTREAM_API_KEY: ${AISSTREAM_API_KEY:-}
+      OPENSKY_CLIENT_ID: ${OPENSKY_CLIENT_ID:-}
+      OPENSKY_CLIENT_SECRET: ${OPENSKY_CLIENT_SECRET:-}
       NEWSROOM_WORKERS: ${NEWSROOM_WORKERS:-4}   # desk runs at once; Ollama needs OLLAMA_NUM_PARALLEL of 4 or more
       WASSUP_CONFIG_DIR: /app/config
       # Newsroom (Phase 1). Only used once you run `wassup newsroom connect`.

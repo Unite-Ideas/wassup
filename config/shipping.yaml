@@ -1,0 +1,72 @@
+# Shipping and trade: the SHIPPING layers on the map (see docs/SHIPPING.md).
+
+# Live ships from AISStream (free key from https://aisstream.io, put AISSTREAM_API_KEY in .env).
+ais:
+  enabled: true
+  # Which ships to keep, by AIS ship type: 70-79 cargo, 80-89 tankers. Add 60-69 for passenger
+  # ships or 30 for fishing, if you want them.
+  ship_types: [[70, 79], [80, 89]]
+  # Areas to listen to, as [[south, west], [north, east]]. The whole world by default.
+  boxes: [[[-90, -180], [90, 180]]]
+  track_every_minutes: 15     # how often each ship's position is saved for its trail
+  keep_track_days: 7
+  forget_after_days: 3        # ships not heard from in this long are dropped from the map
+
+# Cargo planes from OpenSky (https://opensky-network.org). Works without an account (a global
+# look every 15 minutes); with OPENSKY_CLIENT_ID and OPENSKY_CLIENT_SECRET in .env, every 2.
+planes:
+  enabled: true
+  every_minutes: 15
+  every_minutes_with_account: 2
+  # Callsign prefixes (ICAO airline codes) of cargo airlines. Passenger airlines also carry
+  # freight in their holds, but only these fly cargo planes.
+  cargo_airlines:
+    FDX: FedEx Express
+    UPS: UPS Airlines
+    GTI: Atlas Air
+    CLX: Cargolux
+    ICV: Cargolux Italia
+    BCS: DHL (European Air Transport)
+    DHK: DHL Air UK
+    DHX: DHL International (Bahrain)
+    DAE: DHL Aero Expreso
+    BOX: AeroLogic (DHL)
+    ABX: ABX Air
+    ATN: Air Transport International
+    CKS: Kalitta Air
+    PAC: Polar Air Cargo
+    NCA: Nippon Cargo Airlines
+    CAO: Air China Cargo
+    CKK: China Cargo Airlines
+    CSS: SF Airlines
+    YZR: YTO Cargo Airlines
+    CYZ: China Postal Airlines
+    SQC: Singapore Airlines Cargo
+    MPH: Martinair Cargo
+    GEC: Lufthansa Cargo
+    ABW: AirBridgeCargo
+    TAY: ASL Airlines Belgium
+    ABR: ASL Airlines Ireland
+    SWN: West Air Sweden
+    NPT: West Atlantic
+    WGN: Western Global
+    LCO: LATAM Cargo Chile
+    TPA: Avianca Cargo
+    MAA: MasAir
+    AJT: Amerijet
+    CWC: Centurion Air Cargo
+    MSX: EgyptAir Cargo
+    AHK: Air Hong Kong
+    ADB: Antonov Airlines
+    VDA: Volga-Dnepr
+    SOO: Southern Air
+
+# IMF PortWatch (ports, chokepoints, daily ship counts from satellite AIS). No key needed.
+portwatch:
+  enabled: true
+  base: https://services9.arcgis.com/weJ1QsnbMYJlCHdG/arcgis/rest/services
+
+# US land border crossings: commercial truck wait times from US Customs and Border Protection.
+borders:
+  enabled: true
+  url: https://bwt.cbp.gov/api/bwtnew

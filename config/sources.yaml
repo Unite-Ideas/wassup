@@ -88,6 +88,23 @@ rss:
   - {key: premium_times, name: Premium Times Nigeria, url: "https://www.premiumtimesng.com/feed", country: NG, language: en, tier: B}
   - {key: mercopress, name: MercoPress, url: "https://en.mercopress.com/rss", country: UY, language: en, tier: B}
 
+  # Shipping and trade
+  - {key: gcaptain, name: gCaptain, url: "https://gcaptain.com/feed/", country: US, language: en, tier: B}
+  - {key: splash247, name: Splash247, url: "https://splash247.com/feed/", country: SG, language: en, tier: B}
+  - {key: loadstar, name: The Loadstar, url: "https://theloadstar.com/feed/", country: GB, language: en, tier: B}
+  - {key: freightwaves, name: FreightWaves, url: "https://www.freightwaves.com/news/feed", country: US, language: en, tier: B}
+  - {key: joc, name: Journal of Commerce, url: "https://www.joc.com/rssfeed", country: US, language: en, tier: B}
+  - {key: seatrade, name: Seatrade Maritime News, url: "https://www.seatrade-maritime.com/rss.xml", country: GB, language: en, tier: B}
+  - {key: maritime_executive, name: The Maritime Executive, url: "https://maritime-executive.com/articles.rss", country: US, language: en, tier: B}
+  - {key: hellenic_shipping, name: Hellenic Shipping News, url: "https://www.hellenicshippingnews.com/feed/", country: GR, language: en, tier: C}
+  - {key: air_cargo_news, name: Air Cargo News, url: "https://www.aircargonews.net/feed/", country: GB, language: en, tier: B}
+  - {key: railway_gazette, name: Railway Gazette International, url: "https://www.railwaygazette.com/feed/", country: GB, language: en, tier: B}
+  - {key: railfreight, name: RailFreight.com, url: "https://www.railfreight.com/feed/", country: NL, language: en, tier: B}
+  - {key: transport_topics, name: Transport Topics, url: "https://www.ttnews.com/rss.xml", country: US, language: en, tier: B}
+  - {key: supply_chain_dive, name: Supply Chain Dive, url: "https://www.supplychaindive.com/feeds/news/", country: US, language: en, tier: B}
+  - {key: port_economics, name: PortEconomics, url: "https://www.porteconomics.eu/feed/", country: BE, language: en, tier: B}
+  - {key: wto_news, name: World Trade Organization, url: "https://www.wto.org/library/rss/latest_news_e.xml", country: CH, language: en, tier: A}
+
   # Original language feeds
   - {key: bbc_russian, name: BBC Russian, url: "https://feeds.bbci.co.uk/russian/rss.xml", country: GB, language: ru, tier: B}
   - {key: bbc_ukrainian, name: BBC Ukrainian, url: "https://feeds.bbci.co.uk/ukrainian/rss.xml", country: GB, language: uk, tier: B}
@@ -126,6 +143,12 @@ gdelt:
     - CYBER_ATTACK
     - CORRUPTION
     - LEAK
+    # Shipping and trade
+    - MARITIME
+    - PIRACY
+    - BLOCKADE
+    - ECON_TRADE_DISPUTE
+    - ECON_FREETRADE
     # Broad themes such as LEADER, SECURITY_SERVICES, MANMADE_DISASTER, and CRISISLEX_* are on
     # a large share of all articles, so they are left out on purpose.
   min_themes_matched: 1
