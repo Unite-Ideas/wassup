@@ -95,9 +95,64 @@ function strikeLayers(id: string): L[] {
   ];
 }
 
+function controlLayers(id: string): L[] {
+  const hex = ["coalesce", ["get", "hex"], "#888888"];
+  const place = ["==", ["get", "category"], "place"];
+  return [
+    { id: `${id}-zone`, type: "fill", filter: cat("zone"), paint: { "fill-color": hex as never, "fill-opacity": 0.3 } },
+    { id: `${id}-zone-line`, type: "line", filter: cat("zone"), paint: { "line-color": hex as never, "line-width": 1 } },
+    { id: `${id}-held`, type: "fill", filter: cat("held"), paint: { "fill-color": hex as never, "fill-opacity": ["interpolate", ["linear"], ["zoom"], 3, 0.32, 9, 0.18] as never } },
+    {
+      id: `${id}-place`, type: "circle", filter: place as unknown as Filter, minzoom: 4,
+      paint: {
+        "circle-radius": ["interpolate", ["linear"], ["zoom"], 4, ["min", 3, ["+", 0.8, ["/", ["coalesce", ["get", "size"], 6], 8]]],
+                          10, ["min", 9, ["+", 3, ["/", ["coalesce", ["get", "size"], 6], 4]]]] as never,
+        "circle-color": hex as never,
+        "circle-stroke-color": ["case", ["has", "changed_from"], "#ffffff",
+                                ["==", ["get", "kind"], "contested"], ["coalesce", ["get", "hex2"], "#ffffff"], "#05080d"] as never,
+        "circle-stroke-width": ["case", ["has", "changed_from"], 2.5, ["==", ["get", "kind"], "contested"], 2.5, 0.6] as never,
+      },
+    },
+    {
+      id: `${id}-place-label`, type: "symbol", filter: ["all", place, [">=", ["coalesce", ["get", "size"], 0], 10]] as unknown as Filter, minzoom: 6.5,
+      layout: { "text-field": ["get", "label"], "text-font": ["Noto Sans Regular"], "text-size": 10.5, "text-offset": [0, 1], "text-anchor": "top", "text-optional": true },
+      paint: { "text-color": "#d7e3ef", "text-halo-color": "#05080d", "text-halo-width": 1.3 },
+    },
+  ];
+}
+
 function layersFor(t: Track): L[] {
   const id = `track-${t.id}`;
+  if (t.kind === "control" || t.kind === "zones") return controlLayers(id);
   return t.kind === "front" ? frontLayers(id) : t.kind === "strikes" ? strikeLayers(id) : movementLayers(id);
+}
+
+function ControlLegend({ s, kind }: { s: TrackState; kind: string }) {
+  const st = s.snapshot?.stats;
+  if (!s.snapshot || !st) return <div className="tp-stats mono dimmer">No map yet; it loads within the hour.</div>;
+  const changed = (s.summary as { changed?: number } | undefined)?.changed ?? 0;
+  return (
+    <div className="tp-stats mono">
+      {kind === "control" ? (
+        <div>Map of <b>{day(s.snapshot.observed_at)}</b>{" "}
+          <a href={st.source_url} target="_blank" rel="noreferrer noopener" title="This version of the Wikipedia map">(Wikipedia)</a></div>
+      ) : (
+        <div>{st.publisher ?? "Source"}, {day(s.snapshot.observed_at)} <a href={st.source_url} target="_blank" rel="noreferrer noopener">(data)</a></div>
+      )}
+      {Object.entries(st.sides ?? {}).sort((a, b) => b[1].places - a[1].places).map(([side, v]) => (
+        <div key={side} className="tp-side" title={side}><i style={{ background: v.hex }} />{side} <span className="dimmer">{v.places}</span></div>
+      ))}
+      {Object.entries(st.zones ?? {}).map(([z, v]) => (
+        <div key={z} className="tp-side" title={v.name}><i style={{ background: v.hex }} />{v.name}{v.km2 ? <span className="dimmer"> {v.km2.toLocaleString()} km²</span> : null}</div>
+      ))}
+      {kind === "control" && (
+        <div className="dimmer">
+          {st.contested ? `${st.contested} contested (ringed in the other side's colour). ` : ""}
+          {s.previous ? (changed ? `${changed} changed hands since ${day(s.previous.observed_at)} (white ring).` : `None changed hands since ${day(s.previous.observed_at)}.`) : ""}
+        </div>
+      )}
+    </div>
+  );
 }
 
 const hhmm = (s: string) => new Date(s).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
@@ -231,8 +286,12 @@ export default function TracksPanel({ timelineEnd, onOverlays, onFocus }: Props)
 
   useEffect(() => {
     api.tracks().then((t) => {
-      setTracks(t);
-      setOn(new Set(t.map((x) => x.id)));
+      // Holdings maps first group after the fronts and tracks; your on/off choices are remembered.
+      const order = (x: Track) => (x.kind === "control" || x.kind === "zones" ? 1 : 0);
+      setTracks([...t].sort((a, b) => order(a) - order(b) || a.name.localeCompare(b.name)));
+      let off: number[] = [];
+      try { off = JSON.parse(localStorage.getItem("wassup.tracks.off") ?? "[]"); } catch { /* private window */ }
+      setOn(new Set(t.map((x) => x.id).filter((id) => !off.includes(id))));
     }).catch(() => undefined);
   }, []);
 
@@ -292,8 +351,9 @@ export default function TracksPanel({ timelineEnd, onOverlays, onFocus }: Props)
       </div>
       {open && (
         <>
-          {tracks.map((t) => {
+          {tracks.map((t, i) => {
             const s = states.get(t.id);
+            const firstHoldings = (t.kind === "control" || t.kind === "zones") && !(i > 0 && (tracks[i - 1].kind === "control" || tracks[i - 1].kind === "zones"));
             const ms = t.kind === "movement" ? (s?.summary as MovementSummary | undefined) : undefined;
             const st = s?.snapshot?.stats;
             const changes = (s?.features.features ?? []).filter((f) => ["gained", "lost"].includes(f.properties?.category));
@@ -301,9 +361,15 @@ export default function TracksPanel({ timelineEnd, onOverlays, onFocus }: Props)
             const lost = changes.filter((f) => f.properties?.category === "lost").reduce((a, f) => a + (f.properties?.km2 ?? 0), 0);
             return (
               <div key={t.id} className="tp-track">
+                {firstHoldings && <div className="tp-group mono">WHO HOLDS WHAT</div>}
                 <label className="toggle-row">
                   <span><b>{t.name}</b><br /><span className="dimmer mono" style={{ fontSize: 10 }}>{t.source}</span></span>
-                  <input type="checkbox" checked={on.has(t.id)} onChange={() => setOn((o) => { const n = new Set(o); if (n.has(t.id)) n.delete(t.id); else n.add(t.id); return n; })} />
+                  <input type="checkbox" checked={on.has(t.id)} onChange={() => setOn((o) => {
+                    const n = new Set(o);
+                    if (n.has(t.id)) n.delete(t.id); else n.add(t.id);
+                    try { localStorage.setItem("wassup.tracks.off", JSON.stringify(tracks.filter((x) => !n.has(x.id)).map((x) => x.id))); } catch { /* private window */ }
+                    return n;
+                  })} />
                 </label>
                 {on.has(t.id) && s && ms && (
                   <div className="tp-stats mono">
@@ -316,6 +382,7 @@ export default function TracksPanel({ timelineEnd, onOverlays, onFocus }: Props)
                     <Reports state={s} onFocus={onFocus} onChange={() => setRefresh((x) => x + 1)} />
                   </div>
                 )}
+                {on.has(t.id) && (t.kind === "control" || t.kind === "zones") && s && <ControlLegend s={s} kind={t.kind} />}
                 {on.has(t.id) && t.kind === "strikes" && s?.summary && (
                   <Strikes state={s} onFocus={onFocus} onChange={() => setRefresh((x) => x + 1)} />
                 )}

@@ -1,0 +1,38 @@
+# Who holds what: control maps for wars and insurgencies, drawn on the MAP view.
+#
+# Most come from Wikipedia's detailed control maps: volunteers keep a list of every town with a
+# coloured marker for whoever holds it, and the map's legend says which colour is which side.
+# Wassup reads the current version every few hours and fills in history (daily for recent
+# months, weekly before that). Shown as "per Wikipedia, as edited on <date>": volunteer maps can
+# lag events and some are disputed.
+#
+# To add a conflict, find its map on Wikipedia (a page called "Module:... detailed map") and add
+# an entry. Changes apply on restart.
+
+wikipedia:
+  daily_days: 120        # one map a day for this many days back
+  weekly_days: 730       # then one a week back to this many days
+  check_hours: 3         # how often to look for new edits
+  maps_per_run: 8        # history maps fetched per conflict per run (gently: Wikipedia asks bots to go slow)
+
+conflicts:
+  - {key: yemen, name: "Yemen", module: "Yemeni Civil War detailed map", desk: iran_mideast}
+  - {key: gaza-israel, name: "Israel, Gaza, West Bank and Lebanon", module: "Israeli-Palestinian conflict detailed map", desk: iran_mideast}
+  - {key: syria, name: "Syria", module: "Syrian Civil War detailed map", desk: iran_mideast}
+  - {key: lebanon, name: "Lebanon", module: "Lebanese insurgency detailed map", desk: iran_mideast}
+  - {key: iraq, name: "Iraq", module: "Iraqi insurgency detailed map", desk: iran_mideast}
+  - {key: sudan, name: "Sudan", module: "Sudanese Internal Conflict detailed map", desk: world_watch}
+  - {key: myanmar, name: "Myanmar", module: "Myanmar Civil War detailed map", desk: world_watch}
+  - {key: sahel, name: "Mali and the Sahel", module: "Mali War detailed map", desk: world_watch}
+  - {key: libya, name: "Libya", module: "Libyan Civil War detailed map", desk: world_watch}
+  - {key: somalia, name: "Somalia", module: "Somali Civil War detailed map", desk: world_watch}
+  - {key: nigeria, name: "Nigeria", module: "Nigerian insurgency detailed map", desk: world_watch}
+
+# Official zones (not who is winning, but the lines that govern daily life).
+zones:
+  - key: west-bank-oslo
+    name: "West Bank: Oslo areas A, B and C"
+    hdx: state-of-palestine-other-0-0-0-0-0     # dataset on the Humanitarian Data Exchange (data.humdata.org)
+    field: CLASS
+    desk: iran_mideast
+    note: "Palestinian Authority Ministry of Planning, via OCHA's Humanitarian Data Exchange (2019). Two areas are labelled A and none B; one of them is probably Area B."

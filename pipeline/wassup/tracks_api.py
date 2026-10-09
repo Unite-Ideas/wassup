@@ -57,6 +57,21 @@ def state(track_id: int, at: datetime | None = None, compare_days: float = Query
         t = conn.execute("SELECT id, kind FROM tracks WHERE id = %s", (track_id,)).fetchone()
         if not t:
             raise HTTPException(404, "track not found")
+        if t["kind"] in ("control", "zones"):
+            snap = conn.execute(
+                "SELECT id, observed_at, stats FROM track_snapshots WHERE track_id = %s AND observed_at <= %s ORDER BY observed_at DESC LIMIT 1",
+                (track_id, at)).fetchone() or conn.execute(
+                "SELECT id, observed_at, stats FROM track_snapshots WHERE track_id = %s ORDER BY observed_at LIMIT 1", (track_id,)).fetchone()
+            if not snap:
+                return {"kind": t["kind"], "snapshot": None, "previous": None, "features": _fc([])}
+            prev = conn.execute(
+                "SELECT id, observed_at, stats FROM track_snapshots WHERE track_id = %s AND observed_at <= %s ORDER BY observed_at DESC LIMIT 1",
+                (track_id, snap["observed_at"] - timedelta(days=compare_days) + timedelta(hours=6))).fetchone()
+            if prev and prev["id"] == snap["id"]:
+                prev = None
+            feats = _control_features(snap["id"], prev["id"] if prev and t["kind"] == "control" else None)
+            changed = sum(1 for f in feats["features"] if f["properties"].get("changed_from"))
+            return {"kind": t["kind"], "snapshot": snap, "previous": prev, "features": feats, "summary": {"changed": changed}}
         if t["kind"] == "front":
             snap = conn.execute(
                 "SELECT id, observed_at, stats FROM track_snapshots WHERE track_id = %s AND observed_at <= %s ORDER BY observed_at DESC LIMIT 1",
@@ -182,6 +197,85 @@ def _front_features(snap_id: int, prev_id: int | None) -> dict:
                     {"s": snap_id, "p": prev_id, "min": MIN_CHANGE_M2}):
                 feats.append(_feature(r["g"], {"category": r["category"], "km2": round(r["km2"], 2)}))
     return _fc(feats)
+
+
+@lru_cache(maxsize=128)
+def _control_features(snap_id: int, prev_id: int | None) -> dict:
+    """A control map (or zones): areas, then places; places that changed hands since `prev_id`
+    carry who held them before. Cached: snapshots never change."""
+    with db.connect() as conn:
+        rows = conn.execute(
+            """SELECT id, track_id, category, label, props, ST_AsGeoJSON(geom, 4) AS g FROM track_observations
+               WHERE snapshot_id = %s ORDER BY CASE category WHEN 'zone' THEN 0 WHEN 'held' THEN 1 ELSE 2 END,
+                        (props->>'size')::real NULLS FIRST""", (snap_id,)).fetchall()
+        before: dict = {}
+        if prev_id:
+            for r in conn.execute(
+                    """SELECT label, props->>'side' AS side, ST_X(geom) AS lon, ST_Y(geom) AS lat FROM track_observations
+                       WHERE snapshot_id = %s AND category = 'place'""", (prev_id,)):
+                before[(r["label"], round(r["lon"], 2), round(r["lat"], 2))] = r["side"]
+    feats = []
+    for r in rows:
+        props = {"category": r["category"], "id": r["id"], "track_id": r["track_id"], "label": r["label"], **(r["props"] or {})}
+        hexes = props.pop("hexes", None) or []
+        props.pop("sides", None)  # lists do not survive the map's tiling; the place card has them
+        if hexes:
+            props["hex"] = props.get("hex") or hexes[0]
+            props["hex2"] = hexes[1] if len(hexes) > 1 else props["hex"]
+        if before and r["category"] == "place":
+            g = json.loads(r["g"])["coordinates"]
+            was = before.get((r["label"], round(g[0], 2), round(g[1], 2)), "?")
+            if was != "?" and was != props.get("side") and props.get("side"):
+                props["changed_from"] = was or "contested"
+        feats.append(_feature(r["g"], props))
+    return _fc(feats)
+
+
+@router.get("/{track_id}/places/{obs_id}")
+def place(track_id: int, obs_id: int) -> dict:
+    """One place on a control map: who holds it, since when (looking back through the maps), who
+    held it before, and strikes and news nearby."""
+    from .tracks.arrows import stories_near, strikes_near
+
+    with db.connect() as conn:
+        o = conn.execute(
+            """SELECT o.id, o.track_id, o.observed_at, o.label, o.props, o.category, ST_Y(ST_PointOnSurface(o.geom)) AS lat,
+                      ST_X(ST_PointOnSurface(o.geom)) AS lon, s.stats
+               FROM track_observations o JOIN track_snapshots s ON s.id = o.snapshot_id WHERE o.id = %s""", (obs_id,)).fetchone()
+        if not o:
+            raise HTTPException(404, "no such place")
+        side = (o["props"] or {}).get("side")
+        history = []
+        if o["category"] == "place":
+            # The same place on earlier maps: same name, within 3 km.
+            for r in conn.execute(
+                    """SELECT o2.observed_at, o2.props->>'side' AS side, o2.props->'sides' AS sides FROM track_observations o2
+                       WHERE o2.track_id = %s AND o2.category = 'place' AND o2.label = %s AND o2.observed_at <= %s
+                         AND ST_DWithin(o2.geom::geography, ST_SetSRID(ST_MakePoint(%s, %s), 4326)::geography, 3000)
+                       ORDER BY o2.observed_at DESC""", (o["track_id"], o["label"], o["observed_at"], o["lon"], o["lat"])):
+                history.append(r)
+        since, before = None, None
+        for r in history:
+            if r["side"] == side:
+                since = r["observed_at"]
+            else:
+                before = r["side"] or ("contested: " + " / ".join(r["sides"] or []))
+                break
+        oldest = conn.execute("SELECT min(observed_at) AS t FROM track_snapshots WHERE track_id = %s", (o["track_id"],)).fetchone()["t"]
+        out = {
+            "label": o["label"], "category": o["category"], "side": side, "sides": (o["props"] or {}).get("sides"),
+            "kind": (o["props"] or {}).get("kind"), "link": (o["props"] or {}).get("link"),
+            "map_date": o["observed_at"].isoformat(), "source_url": (o["stats"] or {}).get("source_url"),
+            "since": since.isoformat() if since else None, "at_least": bool(since and oldest and since <= oldest),
+            "before": before,
+            "strikes": strikes_near(conn, o["lat"], o["lon"], o["observed_at"]),
+            "stories": stories_near(conn, o["lat"], o["lon"], o["observed_at"]),
+        }
+        if o["category"] in ("held", "zone"):
+            out["km2"] = round(conn.execute("SELECT ST_Area(geom::geography) / 1e6 AS a FROM track_observations WHERE id = %s",
+                                            (obs_id,)).fetchone()["a"])
+            out["name"] = (o["props"] or {}).get("name")
+    return out
 
 
 def _feature(geometry_json: str, props: dict) -> dict:

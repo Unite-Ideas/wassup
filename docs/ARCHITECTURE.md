@@ -261,6 +261,12 @@ Phase 0 implementation notes:
   snapshots, each with unioned and lightly simplified areas (occupied, contested, liberated) and
   attack directions; a movement is a series of dated points. `/api/tracks/{id}/state?at=` returns
   the picture at any moment, with changes since an earlier snapshot computed in PostGIS.
+- **Control maps** (`tracks/control.py`, `config/conflicts.yaml`): Wikipedia "detailed map" Lua
+  modules read into `place` observations (side from the marker's file name and the legend in the
+  same revision's caption, or the documentation page as it was then) and `held` areas per side
+  (each place's Voronoi cell cut to a circle around it, merged per side, with indexed temporary
+  tables). One snapshot per day; history backfilled daily then weekly. `/api/tracks/{id}/places/{obs}`
+  explains a place. **Zones** (`tracks/zones.py`): shapefiles from the Humanitarian Data Exchange.
 - **Attack arrows** (`tracks/arrows.py`, `/api/tracks/{id}/attacks/{obs}`): where an arrow points
   (the place list), how long the push has been marked (followed back map by map), ground within
   15 km changing hands (PostGIS, clipped to a buffer first), and strikes and stories nearby.

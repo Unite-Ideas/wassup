@@ -17,6 +17,7 @@ dependencies = [
     "trafilatura>=2.0",
     "telethon>=1.36",
     "yt-dlp>=2025.1.1",
+    "pyshp>=2.3",
 ]
 
 [project.optional-dependencies]

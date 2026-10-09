@@ -154,6 +154,24 @@ attack (amber arrows), and what changed hands since the previous day, week or mo
 taken, blue retaken). The full history back to April 2022 downloads by itself over the first day.
 In the tracks panel, drag the slider to any date or press PLAY to watch the front move.
 
+**Who holds what.** Under that heading in the tracks panel, one map per war or insurgency:
+Yemen, Syria, Iraq, Lebanon, Israel with Gaza and the West Bank, Sudan, Myanmar, Mali and the
+Sahel, Libya, Somalia and Nigeria. Each side's area is shaded in the colour the source uses, with
+a dot for every town, base, airport or hill it holds; a contested place is ringed in the other
+side's colour, and a place that changed hands within the 1, 7 or 30 days you pick gets a white
+ring. Click a place for who holds it, since when and who held it before, with strikes and news
+nearby. These come from Wikipedia's detailed control maps, kept by volunteers: Wassup reads them
+every few hours and fills in their history (daily for four months, weekly for two years), so the
+slider and PLAY work here too. They can lag events and some are disputed: every card links to the
+exact version of the map it shows. The legend is read from each version of the map, since colours
+change meaning over time. Add a war in `config/conflicts.yaml`.
+
+**The West Bank's Oslo areas** (A, B and C, Hebron's H1 and H2, East Jerusalem) come from the
+Palestinian Authority's planning ministry via the UN's Humanitarian Data Exchange (2019). In that
+file two areas are labelled A and none B: one of them is almost certainly Area B.
+
+Switching a map off in the panel is remembered on this computer.
+
 The amber arrows are DeepState's directions of attack: where its analysts see an active push,
 pointing the way it goes. Click one (zoom in until they appear) for what Wassup works out about
 it: the town it points towards and the nearest one, how long DeepState has marked that push

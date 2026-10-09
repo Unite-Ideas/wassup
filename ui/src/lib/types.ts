@@ -254,7 +254,7 @@ export interface Track {
   id: number;
   key: string;
   name: string;
-  kind: "front" | "movement" | "strikes";
+  kind: "front" | "movement" | "strikes" | "control" | "zones";
   desk: string | null;
   source: string | null;
   description: string | null;
@@ -265,7 +265,16 @@ export interface Track {
   latest: TrackStats | null;
 }
 
+export interface ControlSide { color: string | null; hex: string; places: number }
 export interface TrackStats {
+  sides?: Record<string, ControlSide>;
+  zones?: Record<string, { hex: string; name: string; km2: number | null; parts: number }>;
+  edited_at?: string;
+  source_url?: string;
+  places?: number;
+  contested?: number;
+  dataset?: string;
+  publisher?: string;
   occupied_km2?: number;
   contested_km2?: number;
   liberated_km2?: number;
@@ -298,10 +307,10 @@ export interface StrikeSummary {
 }
 
 export interface TrackState {
-  kind: "front" | "movement" | "strikes";
+  kind: "front" | "movement" | "strikes" | "control" | "zones";
   snapshot: TrackSnapshot | null;
   previous: TrackSnapshot | null;
-  summary?: MovementSummary | StrikeSummary;
+  summary?: MovementSummary | StrikeSummary | { changed: number };
   features: GeoJSON.FeatureCollection;
 }
 
