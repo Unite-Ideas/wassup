@@ -5,6 +5,7 @@ from contextlib import contextmanager
 from typing import Iterator
 
 import psycopg
+import psycopg.types.json
 from pgvector.psycopg import register_vector
 from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
@@ -32,12 +33,48 @@ def connect() -> Iterator[psycopg.Connection]:
         yield conn
 
 
-def init_schema() -> None:
+def init_schema(force: bool = False) -> None:
+    """Bring the database up to db/schema.sql. Skipped when this exact schema was already applied
+    (the app applies it at startup), because its ALTER TABLEs lock tables the running app is using:
+    a `wassup` command run alongside the app would otherwise deadlock with it. When it does run,
+    one process at a time, and a lock conflict is waited out and retried."""
+    import hashlib
+    import time
+
     sql = (REPO_ROOT / "db" / "schema.sql").read_text(encoding="utf-8")
+    digest = hashlib.sha256(sql.encode()).hexdigest()
     # Extensions must exist before register_vector runs, so use a plain connection here.
     with psycopg.connect(settings().database_url, autocommit=True) as conn:
-        conn.execute(sql)
-        sync_country_places(conn)
+        if not force and _applied(conn) == digest:
+            return
+        conn.execute("SELECT pg_advisory_lock(727001)")
+        try:
+            if not force and _applied(conn) == digest:
+                return  # another process just applied it
+            for attempt in range(6):
+                try:
+                    conn.execute("SET lock_timeout = '30s'")
+                    conn.execute(sql)
+                    sync_country_places(conn)
+                    break
+                except (psycopg.errors.DeadlockDetected, psycopg.errors.LockNotAvailable):
+                    if attempt == 5:
+                        raise
+                    time.sleep(2 + 3 * attempt)
+            conn.execute("RESET lock_timeout")
+            conn.execute("""INSERT INTO kv (key, value, updated_at) VALUES ('schema.hash', %s, now())
+                            ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()""",
+                         (psycopg.types.json.Jsonb(digest),))
+        finally:
+            conn.execute("SELECT pg_advisory_unlock(727001)")
+
+
+def _applied(conn: psycopg.Connection) -> str | None:
+    try:
+        row = conn.execute("SELECT value FROM kv WHERE key = 'schema.hash'").fetchone()
+    except psycopg.errors.UndefinedTable:
+        return None
+    return row[0] if row else None
 
 
 def sync_country_places(conn: psycopg.Connection) -> None:
