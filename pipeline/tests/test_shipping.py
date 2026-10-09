@@ -191,3 +191,41 @@ def test_shipping_desk_and_disruptions_from_the_news():
         assert locate(conn, "Port of Antwerp", "BE", {}, "Dock strike in Antwerp")[2] == "Antwerp"
     feats = TestClient(app).get("/api/shipping/events").json()["features"]
     assert [f["properties"]["kind_label"] for f in feats if f["properties"]["source"] == "news"] == ["Strike or labour action"]
+
+
+@pytest.mark.usefixtures("database")
+def test_news_near_a_port_is_news_about_it():
+    """Cold storage and passing mentions stay off a port's card ("Mayor of Kingstown" is a TV show)."""
+    from wassup import db
+    from wassup.cluster import process_new
+    from wassup.collectors.base import RawItem, ensure_source, store_items
+    from wassup.geo import Place
+    from wassup.tracks.arrows import stories_near
+
+    now = datetime.now(timezone.utc)
+    kingstown = Place("gn:3577887", "Kingstown", "VC", "city", 13.16, -61.22)
+    la = Place("gn:5368361", "Los Angeles", "US", "city", 34.05, -118.24)
+    with db.connect() as conn:
+        sid = ensure_source(conn, "near-test", "Near test", "rss")
+        store_items(conn, sid, [
+            RawItem(url="https://n.example/1", title="Kingstown port reopens after volcanic ash cleanup",
+                    summary="Ships return to Kingstown.", published_at=now - timedelta(hours=2), places=[kingstown]),
+            RawItem(url="https://n.example/2", title="Taylor Sheridan pens a third Sicario film in Los Angeles",
+                    summary="The Mayor of Kingstown creator signs on.", published_at=now - timedelta(hours=2), places=[la, la, la, kingstown]),
+            RawItem(url="https://n.example/3", title="Man dies after collision on Route 2 near Kingstown",
+                    summary="A crash in Kingstown.", published_at=now - timedelta(hours=1), places=[kingstown]),
+        ])
+        conn.commit()
+        process_new(conn)
+        ids = {r["t"][:12]: r["id"] for r in conn.execute(
+            "SELECT id, title AS t FROM stories WHERE last_seen > now() - interval '1 day' AND title ~ '(Kingstown|Sheridan|Route 2)'")}
+        port, film, crash = ids["Kingstown po"], ids["Taylor Sheri"], ids["Man dies aft"]
+        kp = conn.execute("SELECT id FROM places WHERE key = 'gn:3577887'").fetchone()["id"]
+        lp = conn.execute("SELECT id FROM places WHERE key = 'gn:5368361'").fetchone()["id"]
+        conn.execute("UPDATE stories SET routed = true, desk = 'shipping', lat = 13.16, lon = -61.22, primary_place_id = %s WHERE id = %s", (kp, port))
+        conn.execute("UPDATE stories SET routed = true, desk = 'world_watch', lat = 34.05, lon = -118.24, primary_place_id = %s WHERE id = %s", (lp, film))
+        conn.execute("UPDATE story_places SET weight = CASE WHEN place_id = %s THEN 0.2 ELSE 3 END WHERE story_id = %s", (kp, film))
+        conn.execute("UPDATE stories SET routed = false, desk = NULL, lat = 13.16, lon = -61.22 WHERE id = %s", (crash,))
+        conn.commit()
+        near = [s["id"] for s in stories_near(conn, 13.16, -61.22, now, prefer_desk="shipping")]
+    assert near == [port]

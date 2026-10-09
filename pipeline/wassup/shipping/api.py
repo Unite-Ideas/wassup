@@ -96,7 +96,7 @@ def site(site_id: int) -> dict:
                WHERE lat IS NOT NULL AND updated_at > now() - interval '30 days'
                  AND ST_DWithin(ST_SetSRID(ST_MakePoint(lon, lat), 4326)::geography, ST_SetSRID(ST_MakePoint(%s, %s), 4326)::geography, %s)
                ORDER BY updated_at DESC LIMIT 6""", (r["lon"], r["lat"], 150_000 if r["kind"] == "chokepoint" else 40_000))]
-        out["stories"] = stories_near(conn, r["lat"], r["lon"], datetime.now(timezone.utc))
+        out["stories"] = stories_near(conn, r["lat"], r["lon"], datetime.now(timezone.utc), prefer_desk="shipping")
     return out
 
 

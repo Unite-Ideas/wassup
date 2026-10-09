@@ -73,8 +73,10 @@ export function siteCard(d: Rec, openStory: (id: number) => void): HTMLElement {
         `${num(s.calls_week)} port calls in the week to ${day(s.as_of)}; normal ${num(s.calls_normal)}${s.change_pct != null ? ` (${pct(s.change_pct)})` : ""}`));
       root.append(el("div", "sc-meta", `Imports ${num(s.import_t)} t (normal ${num(s.import_normal_t)}) · exports ${num(s.export_t)} t (normal ${num(s.export_normal_t)})`));
     }
-    const share = [info.share_of_imports ? `${Math.round(info.share_of_imports * 100)}% of the country's sea imports` : "",
-      info.share_of_exports ? `${Math.round(info.share_of_exports * 100)}% of its sea exports` : ""].filter(Boolean).join(", ");
+    // PortWatch gives these as percents already (100 for a country's only port).
+    const share100 = (v: number) => `${v >= 10 ? Math.round(v) : v.toFixed(1)}%`;
+    const share = [info.share_of_imports ? `${share100(info.share_of_imports)} of the country's sea imports` : "",
+      info.share_of_exports ? `${share100(info.share_of_exports)} of its sea exports` : ""].filter(Boolean).join(", ");
     if (share) root.append(el("div", "sc-meta", share));
   } else if (d.kind === "airport") {
     root.append(el("div", "sc-meta", [info.city, d.country, info.iata, info.icao, info.size === "large" ? "large airport" : "airport"].filter(Boolean).join(" · ")));

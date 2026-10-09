@@ -162,21 +162,28 @@ def strikes_near(conn, lat: float, lon: float, observed_at) -> dict:
     return {"count": len(rows), "latest": [{**r, "observed_at": r["observed_at"].isoformat()} for r in rows[:5]]}
 
 
-def stories_near(conn, lat: float, lon: float, observed_at) -> list[dict]:
+def stories_near(conn, lat: float, lon: float, observed_at, prefer_desk: str | None = None) -> list[dict]:
+    """Stories about this spot: on a desk (not cold storage), with their dot nearby or a nearby town
+    among the places they are mainly about. A passing mention is not enough ("Mayor of Kingstown"
+    is a TV show, not news from Kingstown). Stories on `prefer_desk` come first."""
+    from ..api import ABOUT, MIN_PLACE_WEIGHT
+
     rows = conn.execute(
-        """WITH pt AS (SELECT ST_SetSRID(ST_MakePoint(%(lon)s, %(lat)s), 4326)::geography AS g),
+        f"""WITH pt AS (SELECT ST_SetSRID(ST_MakePoint(%(lon)s, %(lat)s), 4326)::geography AS g),
                 hits AS (
-                  SELECT s.id FROM stories s, pt WHERE s.lat IS NOT NULL
+                  SELECT s.id FROM stories s, pt WHERE s.lat IS NOT NULL AND s.routed
                     AND s.last_seen BETWEEN %(lo)s AND %(hi)s
                     AND ST_DWithin(ST_SetSRID(ST_MakePoint(s.lon, s.lat), 4326)::geography, pt.g, %(m)s)
                   UNION
-                  SELECT sp.story_id FROM story_places sp JOIN places p ON p.id = sp.place_id AND p.kind = 'city', pt
-                    WHERE ST_DWithin(p.geom, pt.g, %(m)s))
+                  SELECT s.id FROM story_places sp JOIN places p ON p.id = sp.place_id AND p.kind = 'city'
+                    JOIN stories s ON s.id = sp.story_id LEFT JOIN places pp ON pp.id = s.primary_place_id, pt
+                    WHERE s.routed AND s.last_seen BETWEEN %(lo)s AND %(hi)s AND sp.weight > {MIN_PLACE_WEIGHT}
+                      AND ST_DWithin(p.geom, pt.g, %(m)s) AND {ABOUT})
            SELECT s.id, coalesce(s.title_en, s.title) AS title, s.last_seen, s.item_count, s.significance
            FROM stories s JOIN hits h ON h.id = s.id
-           WHERE s.last_seen BETWEEN %(lo)s AND %(hi)s
-           ORDER BY s.significance DESC, s.last_seen DESC LIMIT 6""",
-        {"lon": lon, "lat": lat, "m": STORY_KM * 1000, "lo": observed_at - timedelta(days=7), "hi": observed_at + timedelta(days=1)}).fetchall()
+           ORDER BY s.desk IS NOT DISTINCT FROM %(desk)s DESC, s.significance DESC, s.last_seen DESC LIMIT 6""",
+        {"lon": lon, "lat": lat, "m": STORY_KM * 1000, "lo": observed_at - timedelta(days=7), "hi": observed_at + timedelta(days=1),
+         "desk": prefer_desk}).fetchall()
     return [{**r, "last_seen": r["last_seen"].isoformat()} for r in rows]
 
 
