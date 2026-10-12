@@ -10,6 +10,7 @@ Open Ubuntu and run one of these. They work from any folder.
 | --- | --- |
 | Start (after a restart of the PC) | `bash ~/wassup/scripts/start.sh` |
 | Stop (before a restart of the PC) | `bash ~/wassup/scripts/stop.sh` |
+| Start and Stop buttons on your Windows desktop (once) | `bash ~/wassup/scripts/desktop-shortcuts.sh` |
 | Get the latest version and restart | `bash ~/wassup/scripts/update.sh` |
 | Quick health check | `bash ~/wassup/scripts/status.sh` |
 | Full report | `bash ~/wassup/scripts/status.sh report` |
