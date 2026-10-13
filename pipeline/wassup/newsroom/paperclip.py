@@ -140,6 +140,14 @@ class Paperclip:
     def update_routine(self, routine_id: str, body: dict) -> dict:
         return self._req("PATCH", f"/routines/{routine_id}", body)
 
+    def costs_by_agent(self, company_id: str, start: str, end: str) -> list[dict]:
+        """Tokens and cost per agent for runs between two ISO times."""
+        return self._req("GET", f"/companies/{company_id}/costs/by-agent", params={"from": start, "to": end}) or []
+
+    def quota_windows(self, company_id: str) -> list[dict]:
+        """How much of each AI subscription's usage limits is used (Claude: the 5 hour session and the week)."""
+        return self._req("GET", f"/companies/{company_id}/costs/quota-windows") or []
+
     def run_routine(self, routine_id: str) -> dict:
         return self._req("POST", f"/routines/{routine_id}/run", {"source": "manual"})
 

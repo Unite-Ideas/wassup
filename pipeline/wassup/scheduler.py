@@ -17,6 +17,7 @@ from .collectors.government import CongressCollector, FederalRegisterCollector
 from .collectors.rss import RssCollector
 from .locate import run_locate
 from .newsroom.manager import run_manager
+from .newsroom.usage import run_usage
 from .reader import run_reader
 from .retention import run_retention
 from .signals import update_breaking, update_links
@@ -67,7 +68,7 @@ LANES: list[tuple[str, list[tuple[str, float, Callable]]]] = [
     ("audit", [("audit", 120, run_audits)]),
     ("signals", [("breaking", 120, update_breaking), ("links", 600, update_links)]),
     ("locate", [("locate", 120, run_locate)]),
-    ("newsroom", [("newsroom", 60, run_manager)]),
+    ("newsroom", [("newsroom", 60, run_manager), ("claude usage", 600, run_usage)]),
     ("movements", [("movements", 300, run_movements)]),
     ("strikes", [("strikes", 30, run_strikes)]),
     ("control", [("control", 600, run_control), ("zones", 6 * 3600, run_zones)]),

@@ -84,6 +84,7 @@ services:
       OPENSKY_CLIENT_SECRET: ${OPENSKY_CLIENT_SECRET:-}
       NEWSROOM_WORKERS: ${NEWSROOM_WORKERS:-4}   # desk runs at once; Ollama needs OLLAMA_NUM_PARALLEL of 4 or more
       WASSUP_CONFIG_DIR: /app/config
+      TZ: ${TZ:-UTC}          # your time zone (for example America/Chicago): days on the usage chart start at your midnight
       # Newsroom (Phase 1). Only used once you run `wassup newsroom connect`.
       PAPERCLIP_URL: http://paperclip:3100
       PAPERCLIP_PUBLIC_URL: ${PAPERCLIP_PUBLIC_URL:-http://localhost:3100}

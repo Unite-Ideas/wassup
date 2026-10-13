@@ -71,6 +71,15 @@ def status() -> dict:
             "paperclip_url": public_url(), "company_id": cfg.get("company_id"), **counts}
 
 
+@router.get("/claude-usage")
+def claude_usage(hours: int = 48, days: int = 30) -> dict:
+    """Claude tokens by hour, day and agent, and the subscription's usage meters (newsroom/usage.py)."""
+    from .usage import summary
+
+    with db.connect() as conn:
+        return summary(conn, max(1, min(hours, 168)), max(1, min(days, 365)))
+
+
 @router.get("/agents")
 def agents() -> list[dict]:
     with db.connect() as conn:

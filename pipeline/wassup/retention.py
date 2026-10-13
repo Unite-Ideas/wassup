@@ -53,6 +53,7 @@ def run_retention(conn: psycopg.Connection, batch: int = 20000, max_seconds: flo
     done += n
     # Shipping disruptions long over, and chokepoint counts older than two years.
     n = conn.execute("DELETE FROM shipping_events WHERE updated_at < now() - interval '180 days'").rowcount
+    n += conn.execute("DELETE FROM claude_usage WHERE hour < now() - interval '400 days'").rowcount
     n += conn.execute("DELETE FROM chokepoint_days WHERE day < now() - interval '730 days'").rowcount
     conn.commit()
     done += n

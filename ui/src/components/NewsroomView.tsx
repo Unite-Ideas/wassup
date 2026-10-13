@@ -3,6 +3,7 @@ import { api } from "../lib/api";
 import type { Brief, Desk, NewsroomAgent, NewsroomEvent, NewsroomStatus } from "../lib/types";
 import { ago, deskColor, stamp } from "../lib/format";
 import { Markdown } from "../lib/markdown";
+import ClaudeUsage from "./ClaudeUsage";
 
 interface Props {
   desks: Map<string, Desk>;
@@ -139,6 +140,7 @@ export default function NewsroomView({ desks, onSelectStory }: Props) {
         </section>
       </div>
       <div className="nr-col nr-side">
+        <ClaudeUsage />
         <div className="h">On duty</div>
         <div className="agent-grid">
           {active.map((a) => <AgentCard key={a.key} a={a} desks={desks} onSelectStory={onSelectStory} />)}

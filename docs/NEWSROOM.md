@@ -123,3 +123,25 @@ NEWSROOM tab: every desk reports, then the Editor in Chief writes it up.
   if Ollama is not reachable; the error is posted on its check in task.
 - **The Editor in Chief's runs fail:** in Paperclip open the Editor in Chief and use "Test environment";
   usually the Claude token or key is missing or expired.
+
+## How much Claude it uses (CLAUDE USAGE on the NEWSROOM tab)
+
+Every 10 minutes Wassup asks Paperclip how many tokens each Claude agent (the Editor in Chief,
+the Investigator, the Standards Editor) used in each hour, a week back the first time, and
+keeps them. The panel at the top right of the NEWSROOM tab shows:
+
+- **Your subscription's meters**: how much of the current 5 hour session and of the week is
+  used, and when each resets. These are the real limits on a Claude subscription, and they count
+  all Claude use on your account, not only Wassup's. Paperclip reads them from Anthropic. If the
+  panel says they are unavailable, Paperclip could not read them with the login it has (a
+  `claude setup-token` login may not be allowed to); the token counts still work.
+- **Tokens per hour (last 48 hours) or per day (last 30 days)**: hover a bar for the numbers, or
+  **show the numbers** for a table.
+- **Tokens per agent** over 24 hours, 7 days and 30 days.
+
+Most of each run's tokens are Claude re-reading its instructions and the conversation from its
+cache, which weighs much less against your limits than the tokens it writes. On a subscription
+there is no per token bill: the dollar cost is included in the plan. Set `TZ` in `.env` (for
+example `TZ=America/Chicago`) so days start at your midnight.
+
+Paperclip's own Costs page (open Paperclip, then Costs) shows the same runs in more detail.

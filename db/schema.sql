@@ -639,3 +639,24 @@ CREATE TABLE IF NOT EXISTS shipping_events (
     updated_at      timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS shipping_events_time_idx ON shipping_events (updated_at);
+
+-- Claude usage by the newsroom's Claude agents (newsroom/usage.py), from Paperclip: tokens per
+-- agent per hour, and the subscription's own usage meters over time.
+CREATE TABLE IF NOT EXISTS claude_usage (
+    hour            timestamptz NOT NULL,
+    agent_id        text NOT NULL,
+    agent_name      text,
+    input_tokens    bigint NOT NULL DEFAULT 0,      -- new input, not from the cache
+    cached_tokens   bigint NOT NULL DEFAULT 0,      -- input read from the prompt cache (cheaper)
+    output_tokens   bigint NOT NULL DEFAULT 0,
+    cost_cents      integer NOT NULL DEFAULT 0,     -- 0 on a subscription (included)
+    runs            integer NOT NULL DEFAULT 0,
+    PRIMARY KEY (hour, agent_id)
+);
+CREATE TABLE IF NOT EXISTS claude_quota (
+    at              timestamptz NOT NULL,
+    label           text NOT NULL,                  -- Current session, Current week (all models)...
+    used_percent    real,
+    resets_at       timestamptz,
+    PRIMARY KEY (at, label)
+);
