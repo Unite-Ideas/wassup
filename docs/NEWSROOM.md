@@ -132,9 +132,10 @@ keeps them. The panel at the top right of the NEWSROOM tab shows:
 
 - **Your subscription's meters**: how much of the current 5 hour session and of the week is
   used, and when each resets. These are the real limits on a Claude subscription, and they count
-  all Claude use on your account, not only Wassup's. Paperclip reads them from Anthropic. If the
-  panel says they are unavailable, Paperclip could not read them with the login it has (a
-  `claude setup-token` login may not be allowed to); the token counts still work.
+  all Claude use on your account, not only Wassup's. With a `claude setup-token` login
+  (`CLAUDE_CODE_OAUTH_TOKEN` in `.env`) Wassup reads them from Anthropic itself, at most every 10
+  minutes. Anthropic limits how often they may be read: when it says to slow down, Wassup waits
+  30 minutes, then longer each time, and keeps showing the last reading with its time.
 - **Tokens per hour (last 48 hours) or per day (last 30 days)**: hover a bar for the numbers, or
   **show the numbers** for a table.
 - **Tokens per agent** over 24 hours, 7 days and 30 days.

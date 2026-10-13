@@ -8,11 +8,16 @@ interface Usage {
   hourly: (Bucket & { hour: string })[];
   daily: (Bucket & { day: string })[];
   agents: { agent_name: string | null; day: number; week: number; month: number; day_output: number; day_runs: number }[];
-  meters: { ok: boolean; error?: string; at: string; windows?: { label: string; usedPercent: number | null; resetsAt: string | null; valueLabel: string | null }[] } | null;
+  meters: { ok: boolean; error?: string; note?: string | null; at: string; windows?: { label: string; usedPercent: number | null; resetsAt: string | null; valueLabel: string | null }[] } | null;
 }
 
 const fmt = (n: number) => (n >= 1e6 ? `${(n / 1e6).toFixed(n >= 1e7 ? 0 : 1)}M` : n >= 1e3 ? `${(n / 1e3).toFixed(n >= 1e4 ? 0 : 1)}k` : String(Math.round(n)));
 const full = (n: number) => Math.round(n).toLocaleString();
+
+function readAgo(s: string): string {
+  const m = Math.round((Date.now() - Date.parse(s)) / 60e3);
+  return m < 2 ? "just now" : m < 90 ? `${m} min ago` : `${Math.round(m / 60)} h ago`;
+}
 
 function resets(s: string | null): string {
   if (!s) return "";
@@ -122,11 +127,14 @@ export default function ClaudeUsage({ page = false }: { page?: boolean }) {
               <div className="cu-track"><div className={`cu-fill ${m.usedPercent! >= 80 ? "warn" : ""}`} style={{ width: `${Math.min(100, m.usedPercent!)}%` }} /></div>
             </div>
           ))}
-          <div className="dimmer mono cu-note">Your subscription's own limits, all Claude use on your account (not only Wassup).</div>
+          <div className="dimmer mono cu-note">
+            Your subscription's own limits, all Claude use on your account (not only Wassup). Read {readAgo(u.meters.at)}
+            {u.meters.note ? `; ${u.meters.note}, so this is the last reading` : ""}.
+          </div>
         </div>
       ) : (
         <div className="dimmer cu-note">
-          Subscription meters unavailable{u.meters?.error ? `: ${u.meters.error}` : ""}. Token counts below still work. See docs/NEWSROOM.md.
+          Subscription meters unavailable{u.meters?.error ? `: ${u.meters.error}` : ""}. Wassup tries again on its own. Token counts below still work.
         </div>
       )}
       <div className="cu-totals mono">

@@ -84,6 +84,9 @@ services:
       OPENSKY_CLIENT_SECRET: ${OPENSKY_CLIENT_SECRET:-}
       NEWSROOM_WORKERS: ${NEWSROOM_WORKERS:-4}   # desk runs at once; Ollama needs OLLAMA_NUM_PARALLEL of 4 or more
       WASSUP_CONFIG_DIR: /app/config
+      # The newsroom's Claude login (also given to Paperclip below), used only to read your
+      # subscription's usage meters for the USAGE tab.
+      CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN:-}
       TZ: ${TZ:-UTC}          # your time zone (for example America/Chicago): days on the usage chart start at your midnight
       # Newsroom (Phase 1). Only used once you run `wassup newsroom connect`.
       PAPERCLIP_URL: http://paperclip:3100

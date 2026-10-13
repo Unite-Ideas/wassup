@@ -29,7 +29,7 @@ def _hour(t: datetime) -> datetime:
     return t.replace(minute=0, second=0, microsecond=0)
 
 
-def run_usage(conn: psycopg.Connection, pc=None, now: datetime | None = None) -> int:
+def run_usage(conn: psycopg.Connection, pc=None, now: datetime | None = None, meters_client=None) -> int:
     cfg = config(conn)
     if not (cfg.get("board_token") and cfg.get("company_id")):
         return 0
@@ -63,32 +63,107 @@ def run_usage(conn: psycopg.Connection, pc=None, now: datetime | None = None) ->
         # The last two hours are asked for again next time: a run can finish after the hour it started in.
         kv_set(conn, "claude_usage.done_until", max(start, hours[-1] - timedelta(hours=1)).isoformat())
     conn.commit()
-    _meters(conn, pc, company, now)
+    _meters(conn, pc, company, now, meters_client)
     return stored
 
 
-def _meters(conn, pc, company: str, now: datetime) -> None:
-    try:
-        results = pc.quota_windows(company)
-    except Exception as e:  # noqa: BLE001
-        kv_set(conn, "claude_usage.meters", {"ok": False, "error": str(e)[:300], "at": now.isoformat()})
-        conn.commit()
-        return
-    claude = next((r for r in results if r.get("provider") == "anthropic"), None)
-    if not claude or not claude.get("ok"):
-        kv_set(conn, "claude_usage.meters", {"ok": False, "error": (claude or {}).get("error") or "Paperclip reported no Claude meters",
-                                             "at": now.isoformat()})
+USAGE_URL = "https://api.anthropic.com/api/oauth/usage"
+# Anthropic limits how often the meters may be read; when it says to slow down, wait this long,
+# doubling each time it says so again.
+BACKOFF_FIRST = timedelta(minutes=30)
+BACKOFF_MAX = timedelta(hours=6)
+WINDOWS = [("five_hour", "Current session"), ("seven_day", "Current week (all models)"),
+           ("seven_day_sonnet", "Current week (Sonnet only)"), ("seven_day_opus", "Current week (Opus only)")]
+
+
+def _percent(u) -> float | None:
+    if u is None:
+        return None
+    return min(100.0, round(u * 100 if u < 1 else u))
+
+
+def parse_meters(body: dict) -> list[dict]:
+    """Anthropic's usage reply as meters: the 5 hour session and the weekly limits."""
+    out = [{"label": label, "usedPercent": _percent((body.get(key) or {}).get("utilization")),
+            "resetsAt": (body.get(key) or {}).get("resets_at"), "valueLabel": None}
+           for key, label in WINDOWS if body.get(key) is not None]
+    extra = body.get("extra_usage")
+    if extra and extra.get("is_enabled") is not False:
+        out.append({"label": "Extra usage", "usedPercent": _percent(extra.get("utilization")), "resetsAt": None, "valueLabel": None})
+    return out
+
+
+def _direct(conn, now: datetime, client=None) -> tuple[list[dict] | None, str | None]:
+    """Read the meters from Anthropic with the newsroom's Claude login (CLAUDE_CODE_OAUTH_TOKEN).
+    Returns (meters, None), or (None, why not)."""
+    import os
+
+    import httpx
+
+    token = (os.environ.get("CLAUDE_CODE_OAUTH_TOKEN") or "").strip()
+    wait = kv_get(conn, "claude_usage.backoff") or {}
+    if wait.get("until") and now < datetime.fromisoformat(wait["until"]):
+        return None, wait.get("why") or "waiting"
+    client = client or httpx.Client(timeout=15)
+    r = client.get(USAGE_URL, headers={"Authorization": f"Bearer {token}", "anthropic-beta": "oauth-2025-04-20"})
+    if r.status_code == 200:
+        kv_set(conn, "claude_usage.backoff", {})
+        return parse_meters(r.json()), None
+    if r.status_code == 429:
+        last = timedelta(seconds=wait.get("seconds") or 0)
+        delay = min(BACKOFF_MAX, max(BACKOFF_FIRST, last * 2))
+        try:
+            delay = max(delay, timedelta(seconds=int(r.headers.get("retry-after") or 0)))
+        except ValueError:
+            pass
+        why = "Anthropic asked Wassup to read the meters less often"
+    else:
+        delay = BACKOFF_MAX
+        try:
+            why = f"Anthropic said {r.status_code}: {r.json().get('error', {}).get('message', '')}"[:200]
+        except Exception:  # noqa: BLE001
+            why = f"Anthropic said {r.status_code}"
+    kv_set(conn, "claude_usage.backoff", {"until": (now + delay).isoformat(), "seconds": int(delay.total_seconds()), "why": why})
+    return None, why
+
+
+def _meters(conn, pc, company: str, now: datetime, client=None) -> None:
+    import os
+
+    windows, why = None, None
+    if (os.environ.get("CLAUDE_CODE_OAUTH_TOKEN") or "").strip():
+        # The login is a setup-token, which Paperclip can only read the meters with by opening
+        # Claude's /usage screen, and that does not work in its container. Ask Anthropic directly.
+        try:
+            windows, why = _direct(conn, now, client)
+        except Exception as e:  # noqa: BLE001
+            why = f"could not reach Anthropic: {e}"[:200]
+    else:
+        try:
+            claude = next((r for r in pc.quota_windows(company) if r.get("provider") == "anthropic"), None)
+            if claude and claude.get("ok"):
+                windows = claude.get("windows") or []
+            else:
+                why = (claude or {}).get("error") or "Paperclip reported no Claude meters"
+        except Exception as e:  # noqa: BLE001
+            why = str(e)[:300]
+    if windows is None:
+        prev = kv_get(conn, "claude_usage.meters") or {}
+        if prev.get("ok"):
+            # Keep showing the last good reading, with its time and why it is not newer.
+            kv_set(conn, "claude_usage.meters", {**prev, "note": why})
+        else:
+            kv_set(conn, "claude_usage.meters", {"ok": False, "error": why, "at": now.isoformat()})
         conn.commit()
         return
     at = now.replace(second=0, microsecond=0)
-    windows = claude.get("windows") or []
     with conn.cursor() as cur:
         cur.executemany(
             """INSERT INTO claude_quota (at, label, used_percent, resets_at) VALUES (%s, %s, %s, %s)
                ON CONFLICT (at, label) DO UPDATE SET used_percent = EXCLUDED.used_percent, resets_at = EXCLUDED.resets_at""",
             [(at, w["label"], w.get("usedPercent"), w.get("resetsAt")) for w in windows if w.get("label")])
     conn.execute("DELETE FROM claude_quota WHERE at < now() - interval '30 days'")
-    kv_set(conn, "claude_usage.meters", {"ok": True, "at": now.isoformat(), "source": claude.get("source"),
+    kv_set(conn, "claude_usage.meters", {"ok": True, "at": now.isoformat(),
                                          "windows": [{k: w.get(k) for k in ("label", "usedPercent", "resetsAt", "valueLabel")} for w in windows]})
     conn.commit()
 
