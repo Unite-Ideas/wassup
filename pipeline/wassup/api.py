@@ -301,6 +301,14 @@ def timeline(since: str | None = None, until: str | None = None, hours: float | 
     return {"start": start, "end": end, "buckets": buckets, "counts": rows}
 
 
+@app.get("/api/search")
+def search_stories(q: str = Query(..., min_length=2), limit: int = Query(25, le=100)) -> dict:
+    """The search bar: words in any article's headline or summary, close spellings, and stories close in meaning."""
+    from .search import search
+
+    return search(q, limit)
+
+
 @app.get("/api/search/places")
 def place_search(q: str = Query(..., min_length=2), limit: int = Query(12, le=40)) -> list[dict]:
     """Places by name, from places already seen and the full gazetteer, for fixing a location."""

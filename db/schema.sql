@@ -660,3 +660,11 @@ CREATE TABLE IF NOT EXISTS claude_quota (
     resets_at       timestamptz,
     PRIMARY KEY (at, label)
 );
+
+-- Search (search.py): headlines and summaries of every article, without accents or case, so
+-- "marche" finds "Marché", with a trigram index for any word in any order and close spellings.
+CREATE EXTENSION IF NOT EXISTS unaccent;
+CREATE OR REPLACE FUNCTION wassup_norm(t text) RETURNS text LANGUAGE sql IMMUTABLE PARALLEL SAFE
+    AS $$ SELECT lower(public.unaccent('public.unaccent'::regdictionary, coalesce(t, ''))) $$;
+CREATE INDEX IF NOT EXISTS items_search_idx ON items
+    USING gin (wassup_norm(coalesce(title_en, '') || ' ' || coalesce(title, '') || ' ' || coalesce(summary, '')) gin_trgm_ops);

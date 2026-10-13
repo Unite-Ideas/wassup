@@ -1,4 +1,4 @@
-import type { InvestigationDetail, InvestigationListItem, QualityData } from "./types";
+import type { InvestigationDetail, InvestigationListItem, QualityData, SearchResult } from "./types";
 import type { Brief, PlaceHit, Desk, Filters, GlobeData, GraphData, NewsroomAgent, NewsroomEvent, NewsroomStatus, PlaceDetail, Stats, Story, SocialAccount, StoryDetail, TimelineData, Track, TrackState } from "./types";
 
 async function get<T>(path: string, params?: Record<string, string | number | boolean | undefined>): Promise<T> {
@@ -67,6 +67,7 @@ export const api = {
     if (!res.ok) throw new Error(`could not update report: ${res.status}`);
   },
   trackSeries: (id: number) => get<{ t: string; stats: Record<string, number> }[]>(`/tracks/${id}/series`),
+  search: (q: string) => get<SearchResult>("/search", { q }),
   placeSearch: (q: string) => get<PlaceHit[]>("/search/places", { q }),
   fixLocation: async (id: number, body: { place_id?: number | null; place_key?: string; off_map?: boolean }) => {
     const res = await fetch(`/api/stories/${id}/location`, {

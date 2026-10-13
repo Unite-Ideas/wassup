@@ -48,6 +48,7 @@ Then open http://localhost:8000.
 - **Story panel**: why the story was routed (or put in cold storage), every source with its trust tier and language, the connected stories, and the people and organizations involved. MORE and LESS train your interest profile.
 - **Evidence board**: pins a story to the wall with every connected story and the people and organizations that tie them together. Double click a card to re-center on it. Drag cards to pin them.
 - **Timeline**: drag the highlighted window to look at any slice of time, drag its edges to resize it, or press REPLAY to watch the picture build up.
+- **Search** (top bar): every article's headline and summary from the last 30 days, in any language, cold storage included. Words in any order, accents and capitals ignored, close spellings when nothing matches exactly, and stories close in meaning listed below.
 - **Left rail**: toggle desks (ctrl or alt click to show one desk only), include cold storage, set a minimum significance, and jump to breaking or top stories.
 
 ## Layout

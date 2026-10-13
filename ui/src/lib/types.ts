@@ -462,3 +462,11 @@ export interface QualityData {
   open: { id: number; judge: string; created_at: string; left: number } | null;
   standards_editor: boolean;
 }
+
+/** The search bar (pipeline/wassup/search.py). */
+export interface SearchResult {
+  words: string[];
+  matches: (Story & { matched?: number; close_spelling?: boolean })[];
+  fuzzy: boolean;
+  related: (Story & { distance: number })[];
+}

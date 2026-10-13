@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
-import type { Desk, Stats, Story, View } from "../lib/types";
+import type { Desk, SearchResult, Stats, View } from "../lib/types";
 import { StoryCard } from "./StoryPanel";
 
 interface Props {
@@ -13,7 +13,7 @@ interface Props {
 
 export default function TopBar({ stats, view, onView, desks, onSelectStory }: Props) {
   const [q, setQ] = useState("");
-  const [results, setResults] = useState<Story[] | null>(null);
+  const [results, setResults] = useState<SearchResult | null>(null);
   const box = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -22,9 +22,8 @@ export default function TopBar({ stats, view, onView, desks, onSelectStory }: Pr
       return;
     }
     const t = setTimeout(() => {
-      api.stories({ since: new Date(Date.now() - 30 * 86400e3).toISOString(), until: new Date().toISOString(), cold: true, min_sig: 0, q: q.trim(), limit: 25, desks: undefined })
-        .then(setResults).catch(() => setResults([]));
-    }, 250);
+      api.search(q.trim()).then(setResults).catch(() => setResults({ words: [], matches: [], fuzzy: false, related: [] }));
+    }, 300);
     return () => clearTimeout(t);
   }, [q]);
 
@@ -58,12 +57,26 @@ export default function TopBar({ stats, view, onView, desks, onSelectStory }: Pr
       <div className="spacer" />
       <div className="search" ref={box}>
         <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="7" cy="7" r="5" /><path d="M11 11l3.5 3.5" /></svg>
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search stories, last 30 days, including cold storage" />
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search all articles, last 30 days" />
         {results && (
           <div className="search-results">
-            {results.length ? results.map((s) => (
+            {results.matches.filter((s) => !s.close_spelling).map((s) => (
               <StoryCard key={s.id} s={s} desks={desks} onClick={() => { onSelectStory(s.id); setResults(null); }} />
-            )) : <div className="empty">No matches</div>}
+            ))}
+            {results.fuzzy && (
+              <div className="search-group">Close spellings{results.matches.some((s) => !s.close_spelling) ? "" : ` (nothing has ${results.words.map((w) => `"${w}"`).join(" ")} exactly)`}</div>
+            )}
+            {results.matches.filter((s) => s.close_spelling).map((s) => (
+              <StoryCard key={s.id} s={s} desks={desks} onClick={() => { onSelectStory(s.id); setResults(null); }} />
+            ))}
+            {results.related.length > 0 && <div className="search-group">Close in meaning</div>}
+            {results.related.map((s) => (
+              <StoryCard key={s.id} s={s} desks={desks} onClick={() => { onSelectStory(s.id); setResults(null); }} />
+            ))}
+            {!results.matches.length && !results.related.length && (
+              <div className="empty">No stories in the last 30 days have all of these words: {results.words.join(", ")}.
+                Wassup may not have collected this story; try fewer or other words.</div>
+            )}
           </div>
         )}
       </div>
