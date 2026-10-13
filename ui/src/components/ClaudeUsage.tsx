@@ -59,17 +59,39 @@ function Bars({ rows, label, describe }: { rows: Bucket[]; label: (i: number) =>
   );
 }
 
-export default function ClaudeUsage() {
+/** On the NEWSROOM tab as a panel; on the USAGE tab as the page (`page`), which also explains
+ *  what it is waiting for when there is nothing to show yet. */
+export default function ClaudeUsage({ page = false }: { page?: boolean }) {
   const [u, setU] = useState<Usage | null>(null);
+  const [err, setErr] = useState<string | null>(null);
   const [view, setView] = useState<"hours" | "days">("hours");
   const [table, setTable] = useState(false);
   useEffect(() => {
-    const load = () => fetch("/api/newsroom/claude-usage?hours=48&days=30").then((r) => r.json()).then(setU).catch(() => undefined);
+    const load = () => fetch("/api/newsroom/claude-usage?hours=48&days=30")
+      .then((r) => { if (!r.ok) throw new Error(`${r.status} ${r.statusText}`); return r.json(); })
+      .then((d) => { setU(d); setErr(null); })
+      .catch((e) => setErr(String(e)));
     load();
     const t = setInterval(load, 60_000);
     return () => clearInterval(t);
   }, []);
-  if (!u || !u.connected) return null;
+  if (!u || !u.connected) {
+    if (!page) return null;
+    return (
+      <div className="claude-usage">
+        <div className="h">Claude usage</div>
+        {err ? (
+          <div className="cu-note">Could not load usage ({err}). If Wassup was just updated, rebuild it:
+            <pre>docker compose up -d --build</pre></div>
+        ) : !u ? <div className="dimmer cu-note">Loading…</div> : (
+          <div className="cu-note">
+            Wassup is not connected to the newsroom (Paperclip) yet, and Claude only runs there. Connect it once, then the usage fills in within 10 minutes:
+            <pre>docker compose exec app wassup newsroom connect{"\n"}docker compose exec app wassup newsroom setup</pre>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   // Fill empty hours so the bars line up with the clock.
   const now = new Date(); now.setMinutes(0, 0, 0);
@@ -87,6 +109,11 @@ export default function ClaudeUsage() {
   return (
     <div className="claude-usage">
       <div className="h">Claude usage</div>
+      {!u.hourly.length && !u.agents.length && (
+        <div className="dimmer cu-note" style={{ marginBottom: 8 }}>
+          No Claude runs recorded yet. Wassup asks Paperclip every 10 minutes; runs show here after the agents' next check in.
+        </div>
+      )}
       {u.meters?.ok && u.meters.windows?.length ? (
         <div className="cu-meters">
           {u.meters.windows.filter((m) => m.usedPercent != null).map((m) => (

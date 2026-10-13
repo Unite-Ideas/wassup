@@ -1,4 +1,4 @@
-export type View = "globe" | "map" | "board" | "newsroom" | "sources" | "investigate" | "quality";
+export type View = "globe" | "map" | "board" | "newsroom" | "sources" | "investigate" | "quality" | "usage";
 
 export type Tier = "A" | "B" | "C" | "S" | "U";
 

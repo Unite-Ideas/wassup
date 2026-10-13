@@ -15,6 +15,7 @@ import ShippingPanel from "./components/ShippingPanel";
 import SourcesView from "./components/SourcesView";
 import InvestigateView from "./components/InvestigateView";
 import QualityView from "./components/QualityView";
+import ClaudeUsage from "./components/ClaudeUsage";
 
 const HOUR = 3600e3;
 const REFRESH_MS = 60_000;
@@ -228,6 +229,7 @@ export default function App() {
         {view === "sources" && <SourcesView desks={deskMap} />}
         {view === "investigate" && <InvestigateView />}
         {view === "quality" && <QualityView onSelectStory={selectStory} />}
+        {view === "usage" && <div className="usage-view"><ClaudeUsage page /></div>}
         {view === "board" && (
           <BoardView rootId={boardRoot ?? storyId} selectedId={storyId} desks={deskMap} onSelectStory={selectStory} onReRoot={setBoardRoot} />
         )}
