@@ -96,13 +96,14 @@ def learned_adjustment(centroid: np.ndarray, liked: np.ndarray | None, disliked:
     return round(0.6 * adj, 3) if (liked is not None or disliked is not None) else 0.0
 
 
+# Recent stories first, so a big backlog (after `wassup retriage`) never holds up today's news.
 NEEDS_TRIAGE = """
     SELECT id, coalesce(title_en, title) AS title, centroid, item_count, source_count, country_count,
-           desk_review, desk_reviewed_items FROM stories
+           desk_review, desk_reviewed_items, last_seen > now() - interval '3 days' AS recent FROM stories
     WHERE triaged_item_count = 0
        OR item_count >= triaged_item_count * 2
        OR item_count >= triaged_item_count + 10
-    ORDER BY (triaged_item_count = 0) DESC, item_count DESC
+    ORDER BY last_seen > now() - interval '3 days' DESC, (triaged_item_count = 0) DESC, item_count DESC
     LIMIT %s"""
 
 
@@ -139,6 +140,7 @@ def _contexts(conn: psycopg.Connection, stories: list[dict]) -> list[StoryContex
 
 def run_triage(conn: psycopg.Connection, limit: int = 500, max_seconds: float = 90) -> int:
     decider = get_decider()
+    rules_only = RulesDecider()  # stories older than 3 days: re-sorted by the rules, without asking a model
     liked, disliked = _profile(conn)
     started, done = time.time(), 0
     while time.time() - started < max_seconds:
@@ -153,7 +155,7 @@ def run_triage(conn: psycopg.Connection, limit: int = 500, max_seconds: float = 
         # Decide everything first (this can take a while when Jev or the model is asked), then
         # write in one short transaction, locking stories in id order like the other lanes do.
         for ctx in _contexts(conn, stories):
-            d = decider.decide(ctx)
+            d = (decider if by_id[ctx.id]["recent"] else rules_only).decide(ctx)
             c = by_id[ctx.id]["centroid"]  # cleared on stories older than the retention window
             adj = learned_adjustment(as_array(c), liked, disliked) if c is not None else 0.0
             d.relevance = round(max(0.0, min(1.0, d.relevance + adj)), 3)
