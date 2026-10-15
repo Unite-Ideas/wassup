@@ -76,17 +76,33 @@ These stories on your desk moved since your last check:
 {listing}
 
 Decide:
-- summary: two to four sentences on what is happening on your desk right now.
 - important: indexes of the stories that genuinely matter (at most 5).
 - follow: indexes worth tracking over the coming days (at most 3). Keep following stories marked FOLLOWING if they are still developing.
 - unfollow: indexes marked FOLLOWING that are finished or no longer matter.
 - misrouted: indexes that do not belong on this desk or are not news the analyst wants (sports, celebrity, ads, trivia).
-- misplaced: indexes whose map location is clearly wrong for the story (for example a Canadian story placed in New Zealand)."""
-    out = llm(prompt, obj(summary=STR, important=INTS, follow=INTS, unfollow=INTS, misrouted=INTS, misplaced=INTS))
+- misplaced: indexes whose map location is clearly wrong for the story (for example a Canadian story placed in New Zealand).
+- summary: last, in your own words, 2 to 4 sentences naming the actual events in the important stories (who did what,
+  where). Write the news itself, not a description of what a summary is."""
+    # The summary comes last: written after the stories are picked, the model has something to say
+    # and does not copy the instruction instead (a local model did, on five desks).
+    out = llm(prompt, obj(important=INTS, follow=INTS, unfollow=INTS, misrouted=INTS, misplaced=INTS, summary=STR))
     n = len(queue)
     for k in ("important", "follow", "unfollow", "misrouted", "misplaced"):
         out[k] = [i for i in dict.fromkeys(out.get(k) or []) if isinstance(i, int) and 0 <= i < n]
+    if echoes_instructions(out.get("summary") or ""):
+        picked = [queue[i]["title"] for i in out["important"][:3]] or [s["title"] for s in queue[:3]]
+        out["summary"] = "Top stories: " + "; ".join(picked) + "."
     return out
+
+
+ECHO = ("sentences on what", "sentences summarizing", "summarizing the key developments", "what is happening on your desk",
+        "in your own words", "write the news itself", "two to four sentences", "2 to 4 sentences")
+
+
+def echoes_instructions(text: str) -> bool:
+    """A summary that repeats its own instruction instead of giving the news."""
+    t = " ".join(text.lower().split())
+    return len(t) < 20 or any(e in t for e in ECHO)
 
 
 def write_brief(llm: LLM, desk_name: str, digest: dict) -> dict:

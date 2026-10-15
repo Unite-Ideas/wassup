@@ -79,10 +79,10 @@ def main() -> None:
         with db.connect() as conn:
             print(fn(conn))
     elif a.command == "retriage":
+        from .triage import queue_all
+
         with db.connect() as conn:
-            conn.execute("UPDATE stories SET triaged_item_count = 0")
-            conn.commit()
-        print("all stories queued for triage")
+            print(f"{queue_all(conn)} stories queued for triage")
     elif a.command == "relocate":
         from .locate import relocate
 

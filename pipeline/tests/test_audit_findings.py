@@ -168,3 +168,25 @@ def test_rescore_undoes_a_muddled_verdict():
         assert s["routed"] and s["desk"] == "russia_ukraine"  # what the judge meant
         conn.execute("DELETE FROM audit_checks WHERE story_id = %s", (a,))  # not one of your reports
         conn.commit()
+
+
+def test_a_summary_that_repeats_its_instruction_is_caught():
+    from wassup.newsroom.desk import echoes_instructions
+
+    for t in ("Two to four sentences on what is happening on your desk right now.",
+              "Two to four sentences summarizing the key developments.", ""):
+        assert echoes_instructions(t), t
+    assert not echoes_instructions("Saudi-backed Yemeni forces expelled the Houthis from areas near the Bab el-Mandeb Strait.")
+
+
+@pytest.mark.usefixtures("database")
+def test_retriage_queues_every_story_in_batches():
+    from wassup import db
+    from wassup.triage import queue_all
+
+    with db.connect() as conn:
+        _two_stories(conn, "rtq")
+        conn.execute("UPDATE stories SET triaged_item_count = 3")
+        conn.commit()
+        n = queue_all(conn, chunk=1)
+        assert n >= 2 and not conn.execute("SELECT 1 FROM stories WHERE triaged_item_count <> 0").fetchone()

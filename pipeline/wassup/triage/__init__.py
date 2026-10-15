@@ -188,3 +188,26 @@ def run_triage(conn: psycopg.Connection, limit: int = 500, max_seconds: float = 
     if done:
         log.info("triaged %d stories", done)
     return done
+
+
+def queue_all(conn: psycopg.Connection, chunk: int = 2000) -> int:
+    """Mark every story for triage again (`wassup retriage`), a batch at a time in id order, so
+    it queues behind the running pipeline instead of deadlocking with it."""
+    from ..db import lock_stories
+
+    ids = [r["id"] for r in conn.execute("SELECT id FROM stories WHERE triaged_item_count <> 0 ORDER BY id")]
+    conn.commit()
+    done = 0
+    for i in range(0, len(ids), chunk):
+        part = ids[i:i + chunk]
+        for attempt in range(5):
+            try:
+                lock_stories(conn, part)
+                conn.execute("UPDATE stories SET triaged_item_count = 0 WHERE id = ANY(%s)", (part,))
+                conn.commit()
+                done += len(part)
+                break
+            except psycopg.errors.DeadlockDetected:
+                conn.rollback()
+                time.sleep(1 + attempt)
+    return done
