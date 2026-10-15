@@ -103,3 +103,68 @@ def test_connections_are_cleaned_and_audits_act_on_them():
         conn.commit()
         report = audit_report(conn, 7)
         assert "## Connections" in report and "related" in report
+
+
+def test_judge_slips_are_not_counted_as_wassup_mistakes():
+    from wassup.quality.audit import clean_answer
+
+    keys = {"us_politics", "russia_ukraine", "shipping", "migration"}
+    # From a real audit: "wrong", but the desk it is already on.
+    assert clean_answer("desk", "us_politics", {"desk": "us_politics"}, keys) == ("us_politics", "right")
+    # Every question answered at once: only this check's own part counts.
+    assert clean_answer("importance", "desk: none, missed: migration, place: none, importance: too_high, link: none", {}, keys) == ("too_high", None)
+    # An answer to a different question is not a verdict on this one.
+    assert clean_answer("importance", "desk: migration", {}, keys)[1] == "unsure"
+    assert clean_answer("desk", "technology", {"desk": "shipping"}, keys)[1] == "unsure"
+    assert clean_answer("missed", "none", {}, keys) == ("", "right")
+
+
+@pytest.mark.usefixtures("database")
+def test_local_judge_sees_one_kind_of_check_at_a_time():
+    from psycopg.types.json import Jsonb
+
+    from wassup import db
+    from wassup.quality.run import judge_locally
+
+    with db.connect() as conn:
+        aid = conn.execute("INSERT INTO audits (judge) VALUES ('local') RETURNING id").fetchone()["id"]
+        for aspect, subj in (("importance", {"title": "T1", "band": "high", "significance": 3.0, "articles": 3, "outlets": 2, "countries": 1}),
+                             ("link", {"a": 1, "b": 2, "kind": "related", "a_title": "A", "b_title": "B"})):
+            conn.execute("INSERT INTO audit_checks (audit_id, aspect, subject) VALUES (%s, %s, %s)", (aid, aspect, Jsonb(subj)))
+        conn.commit()
+        prompts = []
+
+        def llm(prompt, schema):
+            prompts.append((prompt, schema))
+            ids = [int(l[1:l.index("]")]) for l in prompt.splitlines() if l.startswith("[")]
+            return {"verdicts": [{"id": i, "verdict": "right", "answer": "", "note": ""} for i in ids]}
+
+        judge_locally(conn, aid, llm=llm)
+        conn.execute("DELETE FROM audits WHERE id = %s", (aid,))  # one audit a day: leave the day free for other tests
+        conn.commit()
+    assert len(prompts) == 2
+    imp = next(p for p in prompts if "] importance |" in p[0])
+    assert "] link |" not in imp[0]
+    assert imp[1]["properties"]["verdicts"]["items"]["properties"]["answer"]["enum"] == ["", "too_high", "too_low"]
+
+
+@pytest.mark.usefixtures("database")
+def test_rescore_undoes_a_muddled_verdict():
+    from psycopg.types.json import Jsonb
+
+    from wassup import db
+    from wassup.quality.audit import rescore
+
+    with db.connect() as conn:
+        a, _ = _two_stories(conn, "rsc")
+        # The old reading of "desk: russia_ukraine" sent the story to cold storage.
+        conn.execute("UPDATE stories SET routed = false, desk = 'shipping', excluded_reason = 'desk_review_none' WHERE id = %s", (a,))
+        conn.execute("""INSERT INTO audit_checks (aspect, story_id, subject, verdict, answer, fixed, by, judged_at)
+                        VALUES ('desk', %s, %s, 'wrong', 'desk: russia_ukraine', true, 'local', now())""", (a, Jsonb({"desk": "shipping"})))
+        conn.commit()
+        r = rescore(conn)
+        assert r["moved"] == 1
+        s = conn.execute("SELECT routed, desk FROM stories WHERE id = %s", (a,)).fetchone()
+        assert s["routed"] and s["desk"] == "russia_ukraine"  # what the judge meant
+        conn.execute("DELETE FROM audit_checks WHERE story_id = %s", (a,))  # not one of your reports
+        conn.commit()

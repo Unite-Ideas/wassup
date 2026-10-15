@@ -61,23 +61,64 @@ send your verdicts, then finish the audit and close this issue. The scorecard is
     return aid
 
 
+QUESTION = {
+    "desk": "is the story on the right desk? A desk is right if the story is clearly within that desk's subject.",
+    "missed": "this story is on no desk (cold storage). Should it be on one?",
+    "place": "is the story's main place right? Its place is where it happens or what it is about, not the newspaper's country.",
+    "grouping": "do all these articles report the same event or development?",
+    "importance": "is the story ranked about right? Top means among the day's biggest stories worldwide, low means minor or local.",
+    "link": "is this connection between two stories useful: would a reader of one want to know about the other?",
+}
+ANSWER = {
+    "desk": "the desk key it belongs on, or none",
+    "missed": "the desk key it belongs on",
+    "place": "the right place as City, CC or Country, CC (CC the two letter country code), or none",
+    "grouping": "the numbers of the articles that do not belong, like 2, 5",
+    "importance": "too_high or too_low",
+    "link": "same if the two are the same event (they should be one story), else leave empty",
+}
+
+
+def schema_for(aspect: str) -> dict:
+    """The judge's answer limited to what fits this check's question."""
+    from ..triage.rules import load_desks
+
+    keys = [d.key for d in load_desks()]
+    answer = {"desk": {"type": "string", "enum": ["", "none", *keys]}, "missed": {"type": "string", "enum": ["", *keys]},
+              "importance": {"type": "string", "enum": ["", "too_high", "too_low"]},
+              "link": {"type": "string", "enum": ["", "same"]}}.get(aspect, {"type": "string"})
+    return {"type": "object", "properties": {"verdicts": {"type": "array", "items": {"type": "object", "properties": {
+        "id": {"type": "integer"}, "verdict": {"type": "string", "enum": ["right", "wrong", "unsure"]},
+        "answer": answer, "note": {"type": "string"}}, "required": ["id", "verdict", "answer", "note"]}}},
+        "required": ["verdicts"]}
+
+
 def judge_locally(conn: psycopg.Connection, aid: int, llm=None, max_seconds: float = 120) -> int:
     if llm is None:
         from ..newsroom.llm import default_llm
         llm = default_llm()
     started, done = time.time(), 0
     while time.time() - started < max_seconds:
-        rows = conn.execute("SELECT * FROM audit_checks WHERE audit_id = %s AND verdict IS NULL ORDER BY aspect, id LIMIT %s",
-                            (aid, BATCH)).fetchall()
+        # One kind of check per batch, with only its own question, so the model cannot mix them up.
+        nxt = conn.execute("SELECT aspect FROM audit_checks WHERE audit_id = %s AND verdict IS NULL ORDER BY aspect, id LIMIT 1",
+                           (aid,)).fetchone()
+        rows = conn.execute("SELECT * FROM audit_checks WHERE audit_id = %s AND verdict IS NULL AND aspect = %s ORDER BY id LIMIT %s",
+                            (aid, nxt["aspect"], BATCH)).fetchall() if nxt else []
         if not rows:
             conn.execute("UPDATE audits SET status = 'done', finished_at = now() WHERE id = %s", (aid,))
             conn.commit()
             log.info("audit %s finished", aid)
             break
-        prompt = "\n".join(["You check a news intelligence system's decisions for accuracy.", "", *audit.header(),
-                             *(audit.line(r) for r in rows), "", audit.GUIDE, "Answer for every check id above."])
+        aspect = rows[0]["aspect"]
+        prompt = "\n".join(["You check a news intelligence system's decisions for accuracy.", "",
+                             *(audit.header() if aspect in ("desk", "missed") else []),
+                             f"Every check below asks one question: {QUESTION[aspect]}", "",
+                             *(audit.line(r) for r in rows), "",
+                             "For each check: verdict right, wrong or unsure (unsure only when the headlines cannot tell).",
+                             f"When wrong, answer: {ANSWER[aspect]}. When right, leave answer empty.",
+                             "Judge by what happened, not by words a story shares with a desk or a place. Answer for every check id above."])
         try:
-            out = llm(prompt, SCHEMA)
+            out = llm(prompt, schema_for(aspect))
         except Exception as e:
             log.warning("audit %s: local judge failed: %s", aid, e)
             break

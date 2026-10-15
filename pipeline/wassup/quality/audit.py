@@ -148,6 +148,12 @@ def apply_verdict(conn: psycopg.Connection, check: dict, verdict: str, answer: s
     s = check["subject"]
     sid = check["story_id"]
     keys = {d.key for d in load_desks()}
+    if verdict == "wrong":
+        answer, contradiction = clean_answer(check["aspect"], answer, s, keys)
+        if contradiction:
+            # "Wrong, it belongs on the desk it is on" and answers to another question: the
+            # judge's slip, not Wassup's mistake.
+            verdict, note = contradiction, f"judge's answer did not fit: {note or ''}".strip()
     if verdict == "wrong" and sid:
         if check["aspect"] in ("desk", "missed"):
             desk = answer if answer in keys else None
@@ -176,6 +182,40 @@ def apply_verdict(conn: psycopg.Connection, check: dict, verdict: str, answer: s
     conn.execute("""UPDATE audit_checks SET verdict = %s, answer = %s, note = %s, fixed = %s, by = %s, judged_at = now()
                     WHERE id = %s""", (verdict, answer[:300] or None, (note or "")[:500] or None, fixed, by, check["id"]))
     return fixed
+
+
+def clean_answer(aspect: str, answer: str, s: dict, keys: set[str]) -> tuple[str, str | None]:
+    """The answer to this check's own question, from what a judge wrote. Judges (the local model
+    especially) sometimes answer every question at once ("desk: x, place: y, importance: z") or
+    name the desk the story is already on. Returns (answer, None), or (answer, the verdict to
+    record instead) when the answer contradicts the verdict or does not answer the question."""
+    import re
+
+    a = (answer or "").strip()
+    m = re.search(rf"\b{aspect}\s*:\s*([^,;]*)", a, re.I)
+    if m:
+        a = m.group(1).strip()
+    low = a.lower().strip(" .`'\"")
+    if aspect == "desk":
+        if low in ("", "none", "no desk", "cold storage"):
+            return "none", None
+        if low not in keys:
+            return a, "unsure"
+        if low == s.get("desk"):
+            return low, "right"
+        return low, None
+    if aspect == "missed":
+        if low in ("", "none", "nothing"):
+            return "", "right"  # right to leave it out
+        return (low, None) if low in keys else (a, "unsure")
+    if aspect == "importance":
+        low = low.replace(" ", "_")
+        return (low, None) if low in ("too_high", "too_low") else (a, "unsure")
+    if aspect == "place":
+        return (a, None) if a else (a, "unsure")  # a place, or none
+    if aspect == "link":
+        return ("same", None) if low.startswith("same") else ("", None)
+    return a, None
 
 
 def _set_desk(conn, story_id: int, desk: str | None, by: str) -> None:
@@ -220,3 +260,34 @@ def scorecard(conn: psycopg.Connection, days: int = 30) -> dict:
            WHERE c.verdict = 'wrong' AND c.judged_at > now() - %s * interval '1 day'
            ORDER BY c.judged_at DESC LIMIT 60""", (days,)).fetchall()
     return {"audits": audits, "reports": {r["aspect"]: r["n"] for r in reports}, "mistakes": mistakes, "aspects": ASPECTS}
+
+
+def rescore(conn: psycopg.Connection, days: int = 30) -> dict:
+    """Re-read past "wrong" verdicts with clean_answer. Verdicts that contradicted themselves or
+    answered another question become right or unsure, and stories a muddled desk verdict sent to
+    cold storage (an answer like "desk: x" was read as no desk) go back where they were, unless
+    you have marked the story since."""
+    keys = {d.key for d in load_desks()}
+    out = {"rescored": 0, "restored": 0, "moved": 0}
+    rows = conn.execute("""SELECT * FROM audit_checks WHERE verdict = 'wrong' AND by <> 'you'
+                           AND judged_at > now() - make_interval(days => %s)""", (days,)).fetchall()
+    for r in rows:
+        raw = r["answer"] or ""
+        answer, instead = clean_answer(r["aspect"], raw, r["subject"], keys)
+        if r["aspect"] == "desk" and r["fixed"] and r["story_id"] and raw.strip().lower() not in keys | {"none", ""}:
+            mine = conn.execute("SELECT 1 FROM feedback WHERE story_id = %s LIMIT 1", (r["story_id"],)).fetchone()
+            if not mine:
+                if instead is None and answer in keys:
+                    _set_desk(conn, r["story_id"], answer, f"rescore:{r['by']}")  # what the judge meant
+                    out["moved"] += 1
+                else:
+                    was = r["subject"].get("desk")
+                    conn.execute("""UPDATE stories SET desk = %s, routed = true, excluded_reason = NULL, updated_at = now()
+                                    WHERE id = %s AND excluded_reason = 'desk_review_none'""", (was, r["story_id"]))
+                    out["restored"] += 1
+        if instead or answer != raw:
+            conn.execute("UPDATE audit_checks SET verdict = %s, answer = %s, note = %s WHERE id = %s",
+                         (instead or "wrong", answer or None, f"rescored: {r['note'] or ''}"[:500], r["id"]))
+            out["rescored"] += 1
+    conn.commit()
+    return out

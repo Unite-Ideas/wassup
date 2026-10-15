@@ -9,6 +9,7 @@
   wassup rebuild-stories      re-cluster every item (after changing EMBED_BACKEND or EMBED_MODEL)
   wassup relocate             re-score place evidence for the last week and re-place stories
   wassup audit-report         what the accuracy audits found wrong in the last 7 days, as text
+  wassup audit-rescore        re-read past verdicts where the judge answered the wrong question, and undo their damage
   wassup newsroom connect     connect to Paperclip (you approve it once in the browser)
   wassup newsroom setup       create or update the newsroom in Paperclip: editor, desks, routines
   wassup newsroom status      show the newsroom's agents
@@ -128,6 +129,12 @@ def main() -> None:
 
         with db.connect() as conn:
             print(audit_report(conn, int(a.name or 7)))
+    elif a.command == "audit-rescore":
+        from .quality.audit import rescore
+
+        with db.connect() as conn:
+            r = rescore(conn, int(a.name or 30))
+        print(f"{r['rescored']} verdicts re-read; {r['restored']} stories put back on their desk; {r['moved']} moved to the desk the judge meant")
     elif a.command == "api":
         db.init_schema()
         _api(a.host, a.port)

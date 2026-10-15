@@ -24,7 +24,13 @@ fi
 ok "Docker Desktop is running"
 
 # 2. Start everything: database, Wassup, and the Paperclip newsroom.
-docker compose --profile newsroom up -d ${BUILD:+--build} || { bad "Could not start the containers (see the messages above)."; exit 1; }
+# After an update, rebuild only Wassup's own parts. Paperclip is pinned to a fixed version in
+# docker-compose.yml, so its (large, slow) image is built once and reused; Docker builds it on
+# its own whenever it is missing or its version changes.
+if [ -n "${BUILD:-}" ]; then
+  docker compose build app db backup || { bad "Could not build Wassup (see the messages above)."; exit 1; }
+fi
+docker compose --profile newsroom up -d || { bad "Could not start the containers (see the messages above)."; exit 1; }
 
 # 3. Wait for Wassup to answer (the database may need a minute after a forced stop).
 echo "  Waiting for Wassup to come up..."
