@@ -30,6 +30,10 @@ A="$WASSUP_URL/api/audits"
 - A desk is right if the story clearly belongs to its subject, even if another desk could also take it.
   Stories in cold storage are right to be there if they fit no desk.
 - For grouping, an article belongs if it reports the same event or development, even from another angle.
+- For connections, the line shows why the link was made (shared names, closeness in meaning, or a desk agent).
+  If the two stories are the same event, answer `same`: they are merged into one story. Otherwise a connection is
+  right when a reader of one would want to know about the other, and wrong when they only share a word, a place
+  or a famous name in passing. Wrong ones are taken down for good.
 - For importance, think of a well informed reader's day: top is among the day's biggest stories worldwide,
   low is minor or local.
 - Your verdicts change the stories (a wrong desk is moved, a wrong place is moved, stray articles are taken

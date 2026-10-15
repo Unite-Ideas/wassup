@@ -8,4 +8,4 @@ missed: 20           # stories in cold storage: should they be on a desk?
 place: 25            # is the story's main place right?
 grouping: 10         # do all these articles belong in one story?
 importance: 15       # is the story ranked about right?
-link: 10             # is this connection between two stories real?
+link: 25             # is this connection between two stories real? (25, so one bad night does not swing the rate by 10 points)

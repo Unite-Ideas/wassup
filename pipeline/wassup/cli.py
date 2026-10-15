@@ -8,6 +8,7 @@
   wassup retriage             mark every story for triage again (after editing desks or interests)
   wassup rebuild-stories      re-cluster every item (after changing EMBED_BACKEND or EMBED_MODEL)
   wassup relocate             re-score place evidence for the last week and re-place stories
+  wassup audit-report         what the accuracy audits found wrong in the last 7 days, as text
   wassup newsroom connect     connect to Paperclip (you approve it once in the browser)
   wassup newsroom setup       create or update the newsroom in Paperclip: editor, desks, routines
   wassup newsroom status      show the newsroom's agents
@@ -122,6 +123,11 @@ def main() -> None:
                 print(manager.call_standup(conn, "you"))
             else:
                 p.error("newsroom needs one of: connect, setup, status, standup")
+    elif a.command == "audit-report":
+        from .quality.report import audit_report
+
+        with db.connect() as conn:
+            print(audit_report(conn, int(a.name or 7)))
     elif a.command == "api":
         db.init_schema()
         _api(a.host, a.port)

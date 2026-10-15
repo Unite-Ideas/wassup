@@ -668,3 +668,23 @@ CREATE OR REPLACE FUNCTION wassup_norm(t text) RETURNS text LANGUAGE sql IMMUTAB
     AS $$ SELECT lower(public.unaccent('public.unaccent'::regdictionary, coalesce(t, ''))) $$;
 CREATE INDEX IF NOT EXISTS items_search_idx ON items
     USING gin (wassup_norm(coalesce(title_en, '') || ' ' || coalesce(title, '') || ' ' || coalesce(summary, '')) gin_trgm_ops);
+
+-- Pairs of stories close in meaning but below the merge threshold, checked by the local model
+-- (dedupe.py): same event or not. Same ones are merged by the clustering step.
+CREATE TABLE IF NOT EXISTS story_pair_checks (
+    a               bigint NOT NULL,
+    b               bigint NOT NULL,
+    similarity      real,
+    same            boolean NOT NULL,
+    by              text NOT NULL DEFAULT 'local',  -- local | claude | you
+    checked_at      timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (a, b)
+);
+-- Connections an audit or you judged wrong: taken down, and never drawn again by the rules.
+CREATE TABLE IF NOT EXISTS link_rejections (
+    a               bigint NOT NULL,
+    b               bigint NOT NULL,
+    by              text,
+    created_at      timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (a, b)
+);

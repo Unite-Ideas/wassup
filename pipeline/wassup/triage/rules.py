@@ -1,6 +1,8 @@
 """Keyword, URL and GDELT theme rules. Free, instant, and good enough for most stories."""
 from __future__ import annotations
 
+import re
+
 from dataclasses import dataclass
 
 from ..config import load_yaml
@@ -50,10 +52,14 @@ class RulesDecider(Decider):
             kws = d.keywords.find(text)
             themes = sorted({t for t in ctx.themes if t.startswith(d.themes)}) if d.themes else []
             geo = bool(d.countries & set(ctx.countries))
-            # Themes are broad (LEGISLATION fits any parliament), so they only count when a
-            # keyword or a location already ties the story to this desk.
-            score = min(len(kws), 5) + ((0.5 * min(len(themes), 3) + (0.75 if geo else 0)) if (kws or geo) else 0)
-            scores[d.key] = {"score": score, "keywords": kws[:8], "themes": themes[:5], "geo": geo, "priority": d.priority}
+            # A desk needs one of its own words. Themes are broad (LEGISLATION fits any parliament)
+            # and a location says little on its own (a car crash in Ohio is not US politics), so
+            # both only strengthen a keyword match. Headlines in other languages are matched again
+            # once translated.
+            hint = 0.5 * min(len(themes), 3) + (0.75 if geo else 0)
+            score = min(len(kws), 5) + hint if kws else 0
+            scores[d.key] = {"score": score, "keywords": kws[:8], "themes": themes[:5], "geo": geo, "priority": d.priority,
+                             "hint": hint if geo else 0}
         return scores
 
     def exclusion(self, ctx: StoryContext) -> tuple[str | None, float]:
@@ -68,6 +74,9 @@ class RulesDecider(Decider):
         return (best, best_strength) if best_strength >= 1 else (None, 0.0)
 
     def decide(self, ctx: StoryContext) -> Decision:
+        if not_news(ctx):
+            return Decision(desk=None, routed=False, excluded_reason="not_news", significance=0.5, relevance=0.0, confidence=0.95,
+                            backend=self.name, notes={"desk_score": 0, "matched": {}, "excluded": "not_news", "include": []})
         scores = self.desk_scores(ctx)
         desk, info = max(scores.items(), key=lambda kv: (kv[1]["score"], kv[1]["priority"]))
         best = info["score"]
@@ -89,7 +98,10 @@ class RulesDecider(Decider):
         if routed:
             confidence = 0.9 if best >= 3 and not excluded else 0.6 if best >= 2 else 0.45
         else:
-            confidence = 0.9 if best < 0.75 else 0.7 if excluded and best < 2 else 0.45
+            # No desk word, but the place and topics point at a desk: not routed on that alone,
+            # but unsure, so the local model is asked.
+            hinted = max((v["hint"] for v in scores.values()), default=0) >= 0.75
+            confidence = 0.45 if hinted and not excluded else 0.9 if best < 0.75 else 0.7 if excluded and best < 2 else 0.45
         return Decision(
             desk=desk if routed else (desk if best >= 1 else None), routed=routed, excluded_reason=reason,
             significance=round(min(5.0, significance), 2), relevance=round(relevance, 3),
@@ -97,3 +109,21 @@ class RulesDecider(Decider):
             notes={"desk_score": best, "matched": {k: v for k, v in info.items() if k in ("keywords", "themes", "geo")},
                    "excluded": excluded, "include": include_hits[:5]},
         )
+
+
+# Pages that are not a news story: site pages, author pages, automated stock notes, and
+# digests of many unrelated stories (briefs, letters, morning shows; live blogs on one topic are news). They match every desk a
+# little and tie unrelated stories together, so they go to cold storage.
+NOT_NEWS = re.compile(
+    r"\bterms of (service|use)\b|\bprivacy policy\b|\bcookie policy\b|\bwriter page\b|\|\s*author\b|^subscribe\b|"
+    r"\bprice target\b|\bshares (bought|sold|acquired) by\b|\$[a-z]{1,5} shares\b|"
+    r"\((nyse|nasdaq|nysearca|otcmkts|tsx|lon)\s*:|\bstock (rating|position)\b|\bweek in review\b|\btest your knowledge\b", re.I)
+
+
+def not_news(ctx: StoryContext) -> bool:
+    """Most of the story's articles look like site pages, stock notes or roundups."""
+    from ..signals import DIGEST
+
+    titles = [t for t in [ctx.title, *ctx.item_titles] if t]
+    hits = sum(bool(NOT_NEWS.search(t) or DIGEST.search(t)) for t in titles)
+    return bool(titles) and hits * 2 > len(titles)

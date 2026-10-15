@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from collections import defaultdict
 from itertools import combinations
 
@@ -56,6 +57,17 @@ GENERIC_ENTITIES = {
 }
 
 
+# Pages that cover many unrelated stories at once (live blogs, news roundups, morning shows):
+# they name everyone, so the people and organizations on them tie unrelated stories together.
+# Live blogs follow one topic but name everyone in it; digests cover many unrelated stories.
+LIVE = re.compile(r"^(the latest\b|latest:|live:|live updates|live blog|as it happened)", re.I)
+DIGEST = re.compile(
+    r"news briefs?\b|\bbriefs? for\b|morning news\b|evening news\b|\bnews roundup\b|\bweek in review\b|"
+    r"\bwhat to know today\b|\bletters? to the editor\b|^(national|world|local|state|international) news\b|"
+    r"^(world|national|nation|politics) - ", re.I)
+ROUNDUP = re.compile(f"{LIVE.pattern}|{DIGEST.pattern}", re.I)
+
+
 def update_links(conn: psycopg.Connection, window_h: float = 72, max_stories: int = 4000,
                  per_story: int = 6, max_entity_df: int = 15) -> int:
     """Link routed stories that are related but distinct (embedding similarity just below the
@@ -84,9 +96,10 @@ def update_links(conn: psycopg.Connection, window_h: float = 72, max_stories: in
     ents: dict[int, set[int]] = defaultdict(set)
     names: dict[int, str] = {}
     for r in conn.execute(
-        """SELECT DISTINCT i.story_id, e.id, e.name FROM items i JOIN item_entities ie ON ie.item_id = i.id
+        """SELECT DISTINCT i.story_id, e.id, e.name, coalesce(i.title_en, i.title) AS title FROM items i
+           JOIN item_entities ie ON ie.item_id = i.id
            JOIN entities e ON e.id = ie.entity_id WHERE i.story_id = ANY(%s)""", (ids,)):
-        if r["name"].lower() in GENERIC_ENTITIES:
+        if r["name"].lower() in GENERIC_ENTITIES or ROUNDUP.search(r["title"] or ""):
             continue
         ents[r["id"]].add(r["story_id"])
         names[r["id"]] = r["name"]
@@ -99,12 +112,22 @@ def update_links(conn: psycopg.Connection, window_h: float = 72, max_stories: in
         if len(eids) >= 2:
             links[(a, b, "same_actor")] = (min(1.0, len(eids) / 4), {"entities": [names[e] for e in eids[:8]]})
 
+    rejected = {(r["a"], r["b"]) for r in conn.execute("SELECT a, b FROM link_rejections WHERE a = ANY(%s) OR b = ANY(%s)", (ids, ids))}
+    links = {k: v for k, v in links.items() if (k[0], k[1]) not in rejected}
+    started = conn.execute("SELECT now() AS t").fetchone()["t"]
     with conn.cursor() as cur:
         cur.executemany(
             """INSERT INTO story_links (a, b, kind, weight, evidence) VALUES (%s, %s, %s, %s, %s)
                ON CONFLICT (a, b, kind) DO UPDATE SET weight = EXCLUDED.weight, evidence = EXCLUDED.evidence, updated_at = now()""",
             [(a, b, k, w, Jsonb(ev)) for (a, b, k), (w, ev) in links.items()],
         )
+    # Links made by these rules between stories looked at now that no longer qualify (the stories
+    # drifted apart, or one became a roundup) are taken down. Agents' links stay.
+    gone = conn.execute(
+        """DELETE FROM story_links WHERE created_by = 'rule' AND updated_at < %s AND a = ANY(%s) AND b = ANY(%s)""",
+        (started, ids, ids)).rowcount
     conn.commit()
+    if gone:
+        log.info("links: %d no longer hold and were removed", gone)
     log.info("links: %d upserted across %d stories", len(links), len(ids))
     return len(links)

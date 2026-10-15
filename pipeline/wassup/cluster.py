@@ -324,6 +324,21 @@ def _merge(conn: psycopg.Connection, max_merges: int) -> int:
             pairs += [(float(sims[a, b]), int(chunk[a]), int(pool[b])) for a, b in zip(r, c)]
     merged, gone = 0, set()
     split = {(r["a"], r["b"]) for r in conn.execute("SELECT a, b FROM story_splits")}
+    # Pairs the duplicate check (dedupe.py) or an audit found to be the same event, whatever
+    # their similarity.
+    confirmed = conn.execute("SELECT a, b FROM story_pair_checks WHERE same").fetchall()
+    for r in confirmed:
+        a, b = r["a"], r["b"]
+        pa, pb = _index.pos.get(a), _index.pos.get(b)
+        if pa is None or pb is None or a in gone or b in gone or (a, b) in split or not _index._counts[pa] or not _index._counts[pb]:
+            continue
+        keep, drop = (a, b) if (_index._counts[pa], -a) >= (_index._counts[pb], -b) else (b, a)
+        _absorb(conn, keep, drop)
+        gone.add(drop)
+        merged += 1
+    if confirmed:
+        conn.execute("DELETE FROM story_pair_checks WHERE same AND (a = ANY(%(g)s) OR b = ANY(%(g)s) OR checked_at < now() - interval '3 days')",
+                     {"g": list(gone)})
     for sim, pa, pb in sorted(pairs, reverse=True):
         a, b = _index.ids[pa], _index.ids[pb]
         if a in gone or b in gone or a == b or (min(a, b), max(a, b)) in split:

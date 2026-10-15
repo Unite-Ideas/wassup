@@ -29,7 +29,7 @@ from ..triage.rules import load_desks
 log = logging.getLogger(__name__)
 
 ASPECTS = ["desk", "missed", "place", "grouping", "importance", "link"]
-DEFAULTS = {"per_desk": 6, "missed": 20, "place": 25, "grouping": 10, "importance": 15, "link": 10, "hours": 24,
+DEFAULTS = {"per_desk": 6, "missed": 20, "place": 25, "grouping": 10, "importance": 15, "link": 25, "hours": 24,
             "every_hours": 22, "judge": "auto"}
 
 
@@ -112,7 +112,11 @@ def line(r: dict) -> str:
     if r["aspect"] == "importance":
         return (f"[{r['id']}] importance | ranked {s['band']} ({s['significance']:.1f} of 5; {s['articles']} articles, "
                 f"{s['outlets']} outlets, {s['countries']} countries) | {s['title']}")
-    return f"[{r['id']}] link | `{s['kind']}` between: (A) {s['a_title']} and (B) {s['b_title']}"
+    ev = s.get("evidence") if isinstance(s.get("evidence"), dict) else {}
+    why = (f"shares {', '.join(ev['entities'][:5])}" if ev.get("entities") else
+           f"close in meaning ({ev['similarity']:.2f})" if ev.get("similarity") is not None else
+           "drawn by a desk agent" if str(s.get("by") or "").startswith("agent") else "")
+    return f"[{r['id']}] link | `{s['kind']}`{f' ({why})' if why else ''} between: (A) {s['a_title']} and (B) {s['b_title']}"
 
 
 def sheet(conn: psycopg.Connection, audit_id: int) -> str:
@@ -128,7 +132,10 @@ When wrong, answer with what is right:
 - place: the right place as "City, CC" or "Country, CC" (CC the ISO 3166 two letter code), or none
 - grouping: the numbers of the articles that do not belong, like "2, 5"
 - importance: too_high or too_low (top means among the day's biggest stories, low means minor)
-- link: nothing (just wrong)
+- link: "same" if A and B are the same event (they should be one story; they are merged), else nothing.
+  A connection is right if a reader of one story would want to know about the other: a related event, a cause or
+  consequence, the same people or organizations acting in both, or the same ongoing situation. It is wrong if the
+  two only share a word, a place, or a famous name in passing.
 Judge by what happened, not by words a story shares with a desk or a place. The country of the newspaper is not
 the story's place. A story is on the right desk if it is clearly within that desk's subject."""
 
@@ -149,6 +156,16 @@ def apply_verdict(conn: psycopg.Connection, check: dict, verdict: str, answer: s
                 fixed = True
         elif check["aspect"] == "place" and answer and answer.lower() != "none":
             fixed = _set_place(conn, sid, answer, by)
+        elif check["aspect"] == "link":
+            a_id, b_id = sorted((int(s["a"]), int(s["b"])))
+            if answer.lower().startswith("same"):
+                # Not two stories at all: merged by the clustering step on its next pass.
+                conn.execute("""INSERT INTO story_pair_checks (a, b, same, by) VALUES (%s, %s, true, %s)
+                                ON CONFLICT (a, b) DO UPDATE SET same = true, by = EXCLUDED.by, checked_at = now()""", (a_id, b_id, by))
+            else:
+                conn.execute("DELETE FROM story_links WHERE a = %s AND b = %s", (a_id, b_id))
+                conn.execute("INSERT INTO link_rejections (a, b, by) VALUES (%s, %s, %s) ON CONFLICT DO NOTHING", (a_id, b_id, by))
+            fixed = True
         elif check["aspect"] == "grouping" and answer:
             from ..cluster import detach_item
             arts = s.get("articles") or []
