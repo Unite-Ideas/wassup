@@ -45,10 +45,18 @@ def audit_report(conn, days: int = 7, per_aspect: int = 40) -> str:
             out.append(f"- {d}: {c['wrong']} wrong of {c['wrong'] + c['right']} ({_pct(c['wrong'], c['wrong'] + c['right'])})")
         out += ["", "Where the judge said they belong (was -> should be):", ""]
         out += [f"- {a} -> {b}: {n}" for (a, b), n in moves.most_common(20)]
-        out += ["", "Wrong verdicts:", ""]
-        for r in [r for r in desk if r["verdict"] == "wrong"][:per_aspect]:
+        out += ["", "Wrong verdicts, with what put each story on its desk:", ""]
+        wrong = [r for r in desk if r["verdict"] == "wrong"][:per_aspect]
+        how = {x["id"]: x for x in conn.execute(
+            "SELECT id, triage, desk_review FROM stories WHERE id = ANY(%s)", ([r["story_id"] for r in wrong if r["story_id"]],))}
+        backends = Counter()
+        for r in wrong:
             s = r["subject"]
-            out.append(f"- [{s.get('desk')} -> {r['answer'] or 'none'}] {s.get('title')}" + (f"  ({r['note']})" if r["note"] else ""))
+            why = _why(how.get(r["story_id"]))
+            backends[why.split(":")[0]] += 1
+            out.append(f"- [{s.get('desk')} -> {r['answer'] or 'none'}] {s.get('title')}  [{why}]" + (f"  ({r['note']})" if r["note"] else ""))
+        if backends:
+            out += ["", "Who decided the desks judged wrong: " + ", ".join(f"{k} {n}" for k, n in backends.most_common())]
 
     links = by.get("link", [])
     if links:
@@ -90,3 +98,17 @@ def audit_report(conn, days: int = 7, per_aspect: int = 40) -> str:
             s = r["subject"]
             out.append(f"- {s.get('title') or s.get('a_title')} -> {r['answer'] or '-'}" + (f"  ({r['note']})" if r["note"] else ""))
     return "\n".join(out) + "\n"
+
+
+def _why(st: dict | None) -> str:
+    """What decided a story's desk, from what triage and the second look recorded."""
+    if not st:
+        return "story gone (merged)"
+    t, rv = st.get("triage") or {}, st.get("desk_review") or {}
+    if rv.get("by") and rv.get("by") not in ("local",):
+        return f"audit/you: {rv.get('by')}"
+    if rv.get("desk") and rv.get("sure"):
+        return f"second look: model chose {rv['desk']}"
+    backend = t.get("backend") or "?"
+    kws = ((t.get("matched") or {}).get("keywords") or [])[:4]
+    return f"{backend}: keywords {', '.join(kws) if kws else 'none'}"
